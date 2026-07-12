@@ -1,0 +1,491 @@
+<!--
+  垂直な直線のひき方（小4 算数）学習アプリ  ／ 改訂版 v9
+  ------------------------------------------------------------------
+  ■v9の変更（追加5）反転時の手・線の調整
+   ・反転時は「ひく線」を定規の反対がわに置き直し、定規と垂線の重なりを解消（縦は従来どおり）。
+   ・反転時の手：右手=2まい目の本体に乗せる／2まいをおさえる左手=交点あたり／1まい目の左手=少し左下。縦のときの位置は変えない。
+  ■v9の変更（追加4）
+   ・手は向きによらず「画面の下から・指が上」で置く（右手＝右下／2まいをおさえる左手＝左下）。重なるときは右手が上。
+  ■v9の変更（追加3）
+   ・アが横・斜めのとき、上の三角じょうぎ（2まい目）を垂線の反対がわ（左）へ反転（縦のときは反転しない）。右手も反転側へ。
+  ■v9の変更（追加2）
+   ・説明文を「三角じょうぎを直線アに合わせて…」に統一（45°の長い辺…という言い方をやめた）。
+   ・じぶんでやってみるの②を2動作に分割：まず直線アにのせる→アにそって点Aへスライド。
+   ・手・えんぴつは向きが変わっても「下から・指が上」を保つ（sceneの回転を打ち消す）。
+  ■v9の変更（追加）「🎲 むきをかえる」ボタン
+   ・アを縦/横/ななめにランダムで変更（作図をsceneごと回転。三角じょうぎの向きも一緒に回る）。
+   ・画面に収まるよう自動で縮小＋中央そろえ。文字ア・Aは逆回転で立てて表示。
+  ■v9の変更（「じぶんでやってみる」を手順どおりの3フェーズに）
+   ・はじめは 45°(①) だけをアの左がわに表示。30°(②) は最初は出さない。
+   ・左手は①の少し左に出しておく。①をアにのせても左手はそのまま残す。
+   ・①がアにのると②が右下に出現。右手は最初から②の上に付く（下から出てくっつくのを廃止）。
+   ・②を点Aにのせると右手は消え、左手が2まいをおさえる位置へ移動。
+  ■v8までの主な変更
+   ・成功メッセージのはみ出し修正／線を辺の少し上・前面に描画
+   ・「線をひく」→ えんぴつを始点に置き0.5秒後に動かす
+   ・定規を垂線に近づけ（SLIDER_BELOW 12→4）
+  ------------------------------------------------------------------
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>垂直な直線のひき方</title>
+<style>
+  :root{ --green:#4a9e5c; --green-d:#3b824a; --green-l:#eaf5ea; --green-ll:#f4faf3;
+    --paper:#ffffff; --line:#1f2430; --red:#e23c3c; --tri:#cfe8f7; --tris:#14232e; --ink:#2b2b2b; --sub:#5b6b5e; }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{height:100vh; overflow:hidden; font-family:"Hiragino Maru Gothic ProN","Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",system-ui,sans-serif;
+    background:var(--green-ll); color:var(--ink); display:flex; flex-direction:column; -webkit-tap-highlight-color:transparent}
+  ruby rt{font-size:.55em; font-weight:600}
+  header{flex:0 0 auto; background:var(--green); color:#fff; padding:7px 14px; display:flex; align-items:center; gap:8px 14px; flex-wrap:wrap}
+  header h1{font-size:clamp(16px,4vw,23px); margin:0}
+  .modes{display:flex; gap:8px; margin-left:auto}
+  .mode-btn{border:3px solid #fff; background:rgba(255,255,255,.18); color:#fff; font-size:clamp(13px,3.4vw,17px); font-weight:700; padding:6px 13px; border-radius:999px; cursor:pointer; white-space:nowrap}
+  .mode-btn.active{background:#fff; color:var(--green-d)}
+  main{flex:1 1 auto; min-height:0; display:flex; align-items:center; justify-content:center; padding:6px 10px}
+  .stage{width:100%; max-width:800px; height:100%; background:var(--paper); border:3px solid var(--green); border-radius:14px; overflow:hidden; display:flex}
+  svg{width:100%; height:100%; touch-action:none}
+  .fade{transition:opacity .4s ease}
+  .hidden{opacity:0; pointer-events:none}
+  .grab{cursor:grab}
+  /* 飾り（手・えんぴつ・線・記号）は指の操作を通す。ドラッグできるのは三角じょうぎだけ */
+  #gHandL,#gHandR,#gPencil,#drawnLine,#raMark,#pointA,#lineGroup,#successBadge{pointer-events:none}
+  #successBadge{transition:opacity .4s ease, transform .4s ease; transform:scale(.6)}
+  #successBadge.show{opacity:1; transform:scale(1)}
+  footer{flex:0 0 auto; background:var(--green-l); border-top:3px solid var(--green); padding:9px 14px 11px}
+  .panel{max-width:820px; margin:0 auto}
+  .steprow{display:flex; align-items:center; gap:11px}
+  .stepno{flex:none; width:46px; height:46px; border-radius:50%; background:var(--green); color:#fff; font-size:22px; font-weight:800; display:flex; align-items:center; justify-content:center}
+  .steptext{font-size:clamp(15px,3.7vw,20px); font-weight:700; line-height:1.35}
+  .progress{margin-left:auto; font-size:14px; color:var(--sub); font-weight:700; white-space:nowrap}
+  .controls{display:flex; gap:9px; margin-top:9px; flex-wrap:wrap}
+  button.act{font-family:inherit; font-size:clamp(14px,3.6vw,18px); font-weight:800; padding:9px 15px; border-radius:12px; border:none; cursor:pointer; background:var(--green); color:#fff; box-shadow:0 4px 0 var(--green-d)}
+  button.act:active{transform:translateY(3px); box-shadow:0 1px 0 var(--green-d)}
+  button.act.ghost{background:#fff; color:var(--green-d); box-shadow:0 4px 0 #cfe3cf; border:2px solid var(--green)}
+  button.act.warm{background:#f0993a; box-shadow:0 4px 0 #c9781f}
+  button.act:disabled{opacity:.45; cursor:not-allowed; box-shadow:0 4px 0 #bbb}
+  .hintbox{margin-top:9px; background:#fffbe8; border:2px dashed #e6c65a; border-radius:12px; padding:9px 13px; font-size:15px; font-weight:700; color:#7a5c00; display:none}
+  .hintbox.show{display:block}
+</style>
+
+<header>
+  <h1><ruby>垂直<rt>すいちょく</rt></ruby>な<ruby>直線<rt>ちょくせん</rt></ruby>のひき<ruby>方<rt>かた</rt></ruby></h1>
+  <div class="modes">
+    <button class="mode-btn active" id="btnModeDemo">お手本を見る</button>
+    <button class="mode-btn" id="btnModePlay">じぶんでやってみる</button>
+  </div>
+</header>
+
+<main>
+  <div class="stage">
+    <svg id="svg" viewBox="110 0 645 630" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-label="作図エリア">
+
+     <!-- ここから scene：ランダムでアの向きをかえる部分（まるごと回転） -->
+     <g id="scene">
+      <!-- 直線ア -->
+      <g id="lineGroup">
+        <line x1="290" y1="75" x2="290" y2="560" stroke="var(--line)" stroke-width="4" stroke-linecap="round"/>
+        <text id="txtAr" x="290" y="58" font-size="30" font-weight="800" fill="var(--line)" text-anchor="middle">ア</text>
+      </g>
+
+      <!-- 三角じょうぎ（45°ガイド）：斜辺をアに -->
+      <g id="gGuide"><polygon points="0,0 0,300 -150,150" fill="var(--tri)" fill-opacity="0.9" stroke="var(--tris)" stroke-width="3" stroke-linejoin="round"/><circle cx="-72" cy="150" r="23" fill="#fff" stroke="var(--tris)" stroke-width="2.5"/></g>
+      <!-- 三角じょうぎ（30°スライダー）：よこの辺(上)を点Aの少し下に -->
+      <g id="gSlider"><polygon points="0,0 350,0 0,200" fill="var(--tri)" fill-opacity="0.9" stroke="var(--tris)" stroke-width="3" stroke-linejoin="round"/><circle cx="75" cy="70" r="19" fill="#fff" stroke="var(--tris)" stroke-width="2.5"/></g>
+
+      <!-- ひいた垂直な直線（ア→A・辺の少し上＝点Aの高さ・定規より前面） -->
+      <line id="drawnLine" x1="290" y1="300" x2="534" y2="300" stroke="var(--line)" stroke-width="4" stroke-linecap="round" stroke-dasharray="244" stroke-dashoffset="244"/>
+      <path id="raMark" class="fade hidden" d="M306 300 V284 H290" fill="none" stroke="var(--red)" stroke-width="3"/>
+
+      <!-- 点A -->
+      <g id="pointA"><circle cx="530" cy="300" r="6" fill="var(--red)"/><text id="txtPA" x="530" y="276" font-size="26" font-weight="800" fill="var(--red)" text-anchor="middle">A</text></g>
+
+      <!-- 左手・右手・えんぴつ -->
+      <g id="gHandL" class="fade hidden"><image id="imgHandL" style="display:none"/><g id="fbHandL"><ellipse cx="0" cy="0" rx="58" ry="72" fill="#f3d3b0" stroke="#c9a06f" stroke-width="4"/></g></g>
+      <g id="gHandR" class="fade hidden"><image id="imgHandR" style="display:none"/><g id="fbHandR"><ellipse cx="0" cy="0" rx="58" ry="72" fill="#f3d3b0" stroke="#c9a06f" stroke-width="4"/></g></g>
+      <g id="gPencil" class="fade hidden"><image id="imgPencil" style="display:none"/><g id="fbPencil"><rect x="6" y="6" width="16" height="140" rx="4" fill="#5ad04a" stroke="#2f8f27" stroke-width="3" transform="rotate(-45 6 6)"/></g></g>
+
+     </g>
+     <!-- ここまで scene -->
+
+      <!-- 成功バッジ（回転しない・常に上に固定） -->
+      <g id="successBadge" class="hidden"><rect x="316" y="12" width="316" height="48" rx="24" fill="#fff" stroke="var(--green)" stroke-width="4"/><text id="successText" x="474" y="44" font-size="20" font-weight="900" fill="var(--green-d)" text-anchor="middle">できた！</text></g>
+    </svg>
+  </div>
+</main>
+
+<footer>
+  <div class="panel">
+    <div class="steprow">
+      <div class="stepno" id="stepNo">▶</div>
+      <div class="steptext" id="stepText">「さいしょから」か「つぎへ ▶」で はじめよう。</div>
+      <div class="progress" id="progress"></div>
+    </div>
+    <div class="controls" id="demoControls">
+      <button class="act" id="btnRestart">▶ さいしょから</button>
+      <button class="act ghost" id="btnPrev">◀ もどる</button>
+      <button class="act ghost" id="btnNext">つぎへ ▶</button>
+      <button class="act warm" id="btnPause" style="display:none">⏸ とめる</button>
+      <button class="act ghost" id="btnRandomD" style="margin-left:auto">🎲 むきをかえる</button>
+    </div>
+    <div class="controls" id="playControls" style="display:none">
+      <button class="act warm" id="btnDraw" disabled>✏️ 線をひく</button>
+      <button class="act ghost" id="btnHint">💡 ヒント</button>
+      <button class="act ghost" id="btnReset">はじめから</button>
+      <button class="act ghost" id="btnRandomP" style="margin-left:auto">🎲 むきをかえる</button>
+    </div>
+    <div class="hintbox" id="hintBox"></div>
+  </div>
+</footer>
+
+<script>
+const CONFIG = { LINE_X:290, A_X:530, A_Y:300, GUIDE_TOPY:150, SLIDER_STARTY:390, SLIDER_BELOW:4, SNAP_TOL:54, STEP_MS:1900 };
+const LX=CONFIG.LINE_X, AX=CONFIG.A_X, AY=CONFIG.A_Y;
+const SL_ALIGN = AY + CONFIG.SLIDER_BELOW; // （縦のときの基準）30°定規のよこの辺＝点Aの少し下
+// 反転すると定規の本体が線の反対がわに来るので、辺（＝定規の位置）も線の反対がわへずらす
+const slAlign = ()=> AY + CONFIG.SLIDER_BELOW * sliderFlip();
+const MOVE_MS=1000, DRAW_DELAY=500, DRAW_MS=1200;
+
+const RAW='https://raw.githubusercontent.com/byakusen/gklge.suityoku_heikou/main/';
+const ASSETS={
+  handL:{img:'imgHandL',fb:'fbHandL',url:RAW+'hidarite.png',width:210,anchor:'center'},
+  handR:{img:'imgHandR',fb:'fbHandR',url:RAW+'migite.png',  width:210,anchor:'center'},
+  pencil:{img:'imgPencil',fb:'fbPencil',url:RAW+'enpitu2.png',width:250,anchor:'tip',ox:-6,oy:-4},
+};
+const $=(id)=>document.getElementById(id);
+const svg=$('svg');
+const show=(el,on)=>el.classList.toggle('hidden', !on);
+const tr=(el,x,y,extra='')=>el.setAttribute('transform',`translate(${x} ${y}) ${extra}`);
+
+function anchorImg(a,img,W,H){ if(a.anchor==='tip'){ img.setAttribute('x',a.ox||0); img.setAttribute('y',a.oy||0);} else { img.setAttribute('x',-W/2); img.setAttribute('y',-H/2);} }
+function initAsset(a){
+  const img=$(a.img),fb=$(a.fb); img.style.display='none'; fb.style.display='';
+  const probe=new Image();
+  probe.onload=()=>{ const W=a.width,H=W*(probe.naturalHeight/probe.naturalWidth||1);
+    img.setAttribute('width',W); img.setAttribute('height',H); anchorImg(a,img,W,H);
+    img.setAttribute('href',a.url); img.setAttributeNS('http://www.w3.org/1999/xlink','href',a.url);
+    img.style.display=''; fb.style.display='none'; };
+  probe.onerror=()=>{ img.style.display='none'; fb.style.display=''; };
+  probe.src=a.url;
+}
+Object.values(ASSETS).forEach(initAsset);
+
+const gGuide=$('gGuide'), gSlider=$('gSlider'), gHandL=$('gHandL'), gHandR=$('gHandR'), gPencil=$('gPencil');
+const raMark=$('raMark'), drawnLine=$('drawnLine');
+const successBadge=$('successBadge'), successText=$('successText');
+const GUIDE_POS={x:LX,y:CONFIG.GUIDE_TOPY};
+
+/* ============================================================
+   アの向き（ランダム）：作図はそのまま、sceneごと回転して見せる
+   angle=0 が縦（もとの状態）。90=横、45/135/-45=ななめ。
+   画面からはみ出さないよう縮小＋中央そろえ。文字は逆回転で立てる。
+   ============================================================ */
+const scene=$('scene');
+const ORIENTS=[0, -90, -45];   // アの向き 3パターン：縦線 / 下の横線(Aは上) / 斜め線(画像どおり右下がり)
+let sceneAngle=0;
+const PIVOT={x:390,y:294};             // 作図のほぼ中心
+const VBC={x:432,y:315};               // 作図エリアの中心
+function fitScale(angle){
+  const r=angle*Math.PI/180, c=Math.abs(Math.cos(r)), s=Math.abs(Math.sin(r));
+  const W=500,H=532;                   // 作図のだいたいの大きさ
+  const Wr=W*c+H*s, Hr=W*s+H*c;        // 回転後のはば・たかさ
+  return Math.min(1, 0.95*644/Wr, 0.95*630/Hr);
+}
+function applyScene(angle){
+  sceneAngle=angle;
+  if(angle===0){ scene.removeAttribute('transform'); }
+  else{
+    const sc=fitScale(angle);
+    scene.setAttribute('transform',
+      `translate(${VBC.x-PIVOT.x} ${VBC.y-PIVOT.y}) rotate(${angle} ${PIVOT.x} ${PIVOT.y}) translate(${PIVOT.x} ${PIVOT.y}) scale(${sc.toFixed(4)}) translate(${-PIVOT.x} ${-PIVOT.y})`);
+  }
+  // ア・A は読めるように逆回転して立てる
+  $('txtAr').setAttribute('transform',`rotate(${-angle} 290 50)`);
+  $('txtPA').setAttribute('transform',`rotate(${-angle} 530 276)`);
+}
+function randomOrient(){
+  const opts=ORIENTS.filter(a=>a!==sceneAngle);
+  applyScene(opts[Math.floor(Math.random()*opts.length)]);
+  // 向きがかわったら今のモードをやり直す
+  if($('btnModeDemo').classList.contains('active')) resetDemo(); else setupPlay();
+}
+
+/* 手・えんぴつは向きが変わっても「下から・指が上」に見せる＝sceneの回転を打ち消す */
+const HR=(rot=0)=>(rot||0)-sceneAngle;
+const trH=(el,x,y,rot=0)=>tr(el,x,y,`rotate(${HR(rot)})`);
+
+/* 上の三角じょうぎ（2まい目）：アが横・斜めのとき、垂線の反対がわ（左）へ反転 */
+const sliderFlip=()=> sceneAngle!==0 ? -1 : 1;
+const sliderExtra=()=> `scale(1 ${sliderFlip()})`;
+/* 画面での「右にE・下にD」を canonical のずれに変換（手を向きによらず下から出すため） */
+function screenOff(E,D){ const r=sceneAngle*Math.PI/180, c=Math.cos(r), s=Math.sin(r); return { dx:E*c+D*s, dy:-E*s+D*c }; }
+
+/* 手のオフセット：縦のときは従来どおり、反転（横・斜め）のときは本体側に合わせる */
+const handGuideOff=()=> sliderFlip()===1 ? {dx:-105,dy:195} : {dx:-130,dy:170};   // 左手：1まい目（反転時は少し左下）
+const handRPos=(sx,sy)=> sliderFlip()===1 ? {x:sx+160,y:sy+100} : {x:sx+75,y:sy-74}; // 右手：2まい目の本体
+const HANDL_BOTH_V={x:235,y:410,rot:8};   // 左手：2まいをおさえる（縦・従来どおり）
+const HANDL_BOTH_F={E:-100,D:40,rot:8};   // 左手：2まいをおさえる（反転・交点の左下／えんぴつの通り道を外す）
+
+function placeG(g, on, x, y, extra, animate){
+  if(!on){ show(g,false); return; }
+  const ex = extra||'';
+  const wasHidden=g.classList.contains('hidden');
+  const instant = !animate || wasHidden;
+  if(instant){
+    g.style.transition='none'; tr(g,x,y,ex); show(g,true);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{ g.style.transition=`transform ${MOVE_MS}ms ease`; }));
+  }else{ g.style.transition=`transform ${MOVE_MS}ms ease`; tr(g,x,y,ex); }
+}
+function showBadge(on){ successBadge.classList.toggle('hidden',!on); successBadge.classList.toggle('show',on); }
+
+/* えんぴつ＋線：始点に置いて DRAW_DELAY 後に動かし、線が追従して現れる */
+function drawLineAnim(guardFn){
+  gPencil.style.transition='none'; trH(gPencil,LX,AY); show(gPencil,true);
+  drawnLine.style.transition='none'; drawnLine.setAttribute('stroke-dashoffset',244);
+  setTimeout(()=>{
+    if(guardFn && !guardFn()) return;
+    gPencil.style.transition=`transform ${DRAW_MS}ms ease`; trH(gPencil,AX,AY);
+    drawnLine.style.transition=`stroke-dashoffset ${DRAW_MS}ms ease`; drawnLine.setAttribute('stroke-dashoffset',0);
+    show(raMark,true);
+  }, DRAW_DELAY);
+}
+
+/* ============================================================
+   ステップ定義（1〜6）
+   ============================================================ */
+const S0=CONFIG.SLIDER_STARTY;
+const STEPS=[
+  { text:'<ruby>三角<rt>さんかく</rt></ruby>じょうぎを<ruby>直線<rt>ちょくせん</rt></ruby>アに<ruby>合<rt>あ</rt></ruby>わせて、<ruby>左手<rt>ひだりて</rt></ruby>でおさえる。',
+    guide:true, sliderY:null, handL:'guide', handR:false, pencil:false, mark:false, line:false },
+  { text:'もう1まいの<ruby>三角<rt>さんかく</rt></ruby>じょうぎを、<ruby>右手<rt>みぎて</rt></ruby>で<ruby>下<rt>した</rt></ruby>から<ruby>出<rt>だ</rt></ruby>す。',
+    guide:true, sliderY:S0, handL:'guide', handR:true, pencil:false, mark:false, line:false },
+  { text:'その<ruby>三角<rt>さんかく</rt></ruby>じょうぎを、<ruby>直線<rt>ちょくせん</rt></ruby>アにそって<ruby>点<rt>てん</rt></ruby>Aまで<ruby>動<rt>うご</rt></ruby>かす。（<ruby>右手<rt>みぎて</rt></ruby>も<ruby>一<rt>いっ</rt></ruby>しょ）',
+    guide:true, sliderY:'A', handL:'guide', handR:true, pencil:false, mark:false, line:false },
+  { text:'<ruby>点<rt>てん</rt></ruby>Aに<ruby>来<rt>き</rt></ruby>たら<ruby>右手<rt>みぎて</rt></ruby>をどけ、<ruby>左手<rt>ひだりて</rt></ruby>で2まいをおさえる。',
+    guide:true, sliderY:'A', handL:null, bothL:true, handR:false, pencil:false, mark:false, line:false },
+  { text:'えんぴつで、<ruby>直線<rt>ちょくせん</rt></ruby>アから<ruby>点<rt>てん</rt></ruby>Aへ<ruby>線<rt>せん</rt></ruby>をひく。',
+    guide:true, sliderY:'A', handL:null, bothL:true, handR:false, pencil:true, mark:true, line:true },
+  { text:'<ruby>三角<rt>さんかく</rt></ruby>じょうぎと<ruby>手<rt>て</rt></ruby>をどけて…… <ruby>垂直<rt>すいちょく</rt></ruby>な<ruby>直線<rt>ちょくせん</rt></ruby>のできあがり！',
+    guide:false, sliderY:null, handL:null, handR:false, pencil:false, mark:true, line:true },
+];
+const NSTEP=STEPS.length;
+
+let currentStep=0;
+function introState(){
+  placeG(gGuide,false); placeG(gSlider,false); placeG(gHandL,false); placeG(gHandR,false); show(gPencil,false); show(raMark,false);
+  drawnLine.style.transition='none'; drawnLine.setAttribute('stroke-dashoffset',244); showBadge(false);
+  $('stepNo').textContent='▶';
+  $('stepText').innerHTML='はじめは <ruby>点<rt>てん</rt></ruby>Aとアの<ruby>線<rt>せん</rt></ruby>だけ。「さいしょから」か「つぎへ ▶」でスタート。';
+  $('progress').textContent=`0 / ${NSTEP}`;
+  currentStep=0; updateNav();
+}
+function applyStep(n, animate=true){
+  const s=STEPS[n-1];
+  const sy = s.sliderY==='A' ? slAlign() : s.sliderY;   // 点Aの位置は反転に応じて決める
+  placeG(gGuide, s.guide, GUIDE_POS.x, GUIDE_POS.y, '', animate);
+  placeG(gSlider, sy!=null, LX, sy||0, sliderExtra(), animate);
+  // 左手：1まい目をおさえる（'guide'）か、2まいをおさえる（bothL）
+  if(s.bothL){
+    if(sliderFlip()===1){ placeG(gHandL, true, HANDL_BOTH_V.x, HANDL_BOTH_V.y, `rotate(${HR(HANDL_BOTH_V.rot)})`, animate); }
+    else { const o=screenOff(HANDL_BOTH_F.E,HANDL_BOTH_F.D); placeG(gHandL, true, LX+o.dx, slAlign()+o.dy, `rotate(${HR(HANDL_BOTH_F.rot)})`, animate); }
+  } else if(s.handL==='guide'){
+    const g=handGuideOff(); placeG(gHandL, true, GUIDE_POS.x+g.dx, GUIDE_POS.y+g.dy, `rotate(${HR(0)})`, animate);
+  } else { placeG(gHandL, false); }
+  // 右手：2まい目の本体をおさえる
+  const rp = handRPos(LX, sy||0);
+  placeG(gHandR, !!s.handR, s.handR&&rp.x, s.handR&&rp.y, s.handR?`rotate(${HR(0)})`:'', animate);
+  show(raMark, s.mark);
+
+  if(s.pencil){
+    if(n===5 && animate){ drawLineAnim(()=>currentStep===5); }
+    else { show(gPencil,true); gPencil.style.transition='none'; trH(gPencil,AX,AY); drawnLine.style.transition='none'; drawnLine.setAttribute('stroke-dashoffset',0); }
+  }else{
+    show(gPencil,false); drawnLine.style.transition='none'; drawnLine.setAttribute('stroke-dashoffset', s.line?0:244);
+  }
+
+  if(n===5){ successText.textContent='垂直な直線がひけたね！'; showBadge(true); }
+  else if(n===6){ successText.textContent='できあがり！'; showBadge(true); }
+  else showBadge(false);
+  $('stepNo').textContent=n; $('stepText').innerHTML=s.text; $('progress').textContent=`${n} / ${NSTEP}`;
+  currentStep=n; updateNav();
+}
+
+let playing=false, timer=null;
+function goStep(n){ if(n<=0){ introState(); return; } applyStep(Math.min(n,NSTEP),true); }
+function startAuto(){
+  stopAuto(); applyStep(1,false); playing=true; $('btnPause').style.display='';
+  const tick=()=>{ if(!playing) return; if(currentStep>=NSTEP){ stopAuto(); return; } goStep(currentStep+1); timer=setTimeout(tick,CONFIG.STEP_MS); };
+  timer=setTimeout(tick,800);
+}
+function stopAuto(){ playing=false; clearTimeout(timer); $('btnPause').style.display='none'; }
+function updateNav(){ $('btnPrev').disabled=currentStep<=0; $('btnNext').disabled=currentStep>=NSTEP; }
+$('btnRestart').onclick=()=>startAuto();
+$('btnPrev').onclick=()=>{ stopAuto(); goStep(currentStep-1); };
+$('btnNext').onclick=()=>{ stopAuto(); goStep(currentStep+1); };
+$('btnPause').onclick=()=>stopAuto();
+
+function setMode(mode){
+  const demo=mode==='demo';
+  $('btnModeDemo').classList.toggle('active',demo); $('btnModePlay').classList.toggle('active',!demo);
+  $('demoControls').style.display=demo?'flex':'none'; $('playControls').style.display=demo?'none':'flex';
+  $('hintBox').classList.remove('show'); stopAuto();
+  if(demo) resetDemo(); else setupPlay();
+}
+function resetDemo(){ gGuide.classList.remove('grab'); gSlider.classList.remove('grab'); introState(); }
+$('btnModeDemo').onclick=()=>setMode('demo');
+$('btnModePlay').onclick=()=>setMode('play');
+
+/* ============================================================
+   じぶんでやってみる  ※45°ドラッグ→左手、30°ドラッグ→右手
+   ============================================================ */
+let playState=null;
+const GUIDE_START={x:210,y:150};      // ①1まい目 初期位置（アの左がわに出しておく）
+const SLIDER_START={x:355,y:400};     // ②2まい目 初期位置（あとから右下に出す）
+const SL_REST_OFF=110;                 // ②をまず直線アにのせる位置（点Aより下）
+const slRest=()=>slAlign()+SL_REST_OFF;
+/* 2まい目・手の配置 */
+const placeSlider=(x,y)=>tr(gSlider, x, y, sliderExtra());
+const placeHandR=(sx,sy)=>{ const p=handRPos(sx,sy); trH(gHandR, p.x, p.y, 0); };          // 右手：2まい目の本体
+const placeHandGuide=(gx,gy)=>{ const g=handGuideOff(); trH(gHandL, gx+g.dx, gy+g.dy, 0); }; // 左手：1まい目
+const placeHandBoth=()=>{                                                                   // 左手：2まいをおさえる
+  if(sliderFlip()===1){ trH(gHandL, HANDL_BOTH_V.x, HANDL_BOTH_V.y, HANDL_BOTH_V.rot); }
+  else { const o=screenOff(HANDL_BOTH_F.E,HANDL_BOTH_F.D); trH(gHandL, LX+o.dx, slAlign()+o.dy, HANDL_BOTH_F.rot); }
+};
+
+function setupPlay(){
+  showBadge(false);
+  drawnLine.style.transition='none'; drawnLine.setAttribute('stroke-dashoffset',244);
+  show(raMark,false); show(gPencil,false);
+  playState={ phase:1, guide:{x:GUIDE_START.x,y:GUIDE_START.y}, slider:{x:SLIDER_START.x,y:SLIDER_START.y},
+              guideOk:false, sliderOnLine:false, sliderOk:false, drawn:false };
+  // ①1まい目だけをアの左がわに表示（②2まい目はまだ出さない）
+  gGuide.style.transition='none'; tr(gGuide, playState.guide.x, playState.guide.y); show(gGuide,true); gGuide.classList.add('grab');
+  gSlider.style.transition='none'; show(gSlider,false); gSlider.classList.remove('grab');
+  // 左手は1まい目の少し左に出しておく／右手は出さない
+  gHandL.style.transition='none'; placeHandGuide(playState.guide.x, playState.guide.y); show(gHandL,true);
+  show(gHandR,false);
+  setPlayText();
+  updatePlayHint(false); $('btnDraw').disabled=true;
+}
+function setPlayText(){
+  if(!playState) return;
+  const n=Math.min(playState.phase,3);
+  $('stepNo').textContent = playState.drawn ? '✓' : n;
+  $('progress').textContent = playState.drawn ? '' : n+' / 3';
+  if(playState.drawn) return;
+  const ph=playState.phase;
+  if(ph===1) $('stepText').innerHTML='<ruby>三角<rt>さんかく</rt></ruby>じょうぎを<ruby>直線<rt>ちょくせん</rt></ruby>アに<ruby>合<rt>あ</rt></ruby>わせて、<ruby>左手<rt>ひだりて</rt></ruby>でおさえよう。';
+  else if(ph===2) $('stepText').innerHTML='もう1まいの<ruby>三角<rt>さんかく</rt></ruby>じょうぎを、<ruby>直線<rt>ちょくせん</rt></ruby>アに<ruby>合<rt>あ</rt></ruby>わせよう。';
+  else if(ph===3) $('stepText').innerHTML='<ruby>三角<rt>さんかく</rt></ruby>じょうぎにそって、<ruby>点<rt>てん</rt></ruby>Aまで すべらせよう。';
+  else $('stepText').innerHTML='「<ruby>線<rt>せん</rt></ruby>をひく」ボタンが おせるよ！';
+}
+function toSvgXY(evt){ const p=svg.createSVGPoint(); p.x=evt.clientX; p.y=evt.clientY; const q=p.matrixTransform(scene.getScreenCTM().inverse()); return {x:q.x,y:q.y}; }
+let drag=null;
+function startDrag(which,evt){
+  if(!playState || playState.drawn) return;
+  if(which==='guide'  && playState.phase!==1) return;              // ①はフェーズ1だけ
+  if(which==='slider' && !(playState.phase===2||playState.phase===3)) return; // ②はフェーズ2・3だけ
+  evt.preventDefault();
+  const p=toSvgXY(evt), cur=playState[which];
+  drag={which, dx:p.x-cur.x, dy:p.y-cur.y};
+  if(which==='guide'){ gHandL.style.transition='none'; show(gHandL,true); }
+  else { gHandR.style.transition='none'; show(gHandR,true); }      // 左手はそのまま残す
+  gGuide.style.transition='none'; gSlider.style.transition='none';
+  try{ svg.setPointerCapture(evt.pointerId); }catch(e){}
+}
+function moveDrag(evt){
+  if(!drag) return;
+  const p=toSvgXY(evt), cur=playState[drag.which];
+  cur.x=p.x-drag.dx; cur.y=p.y-drag.dy;
+  if(drag.which==='guide'){
+    tr(gGuide, cur.x, cur.y);
+    placeHandGuide(cur.x, cur.y);   // 左手は1まい目と一体
+  }else{
+    if(playState.phase===3) cur.x=LX;                 // フェーズ3は直線アにそって（たてだけ）動く
+    placeSlider(cur.x, cur.y);
+    placeHandR(cur.x, cur.y);                          // 右手は2まい目と一体（反転側）
+  }
+}
+function endDrag(){ if(!drag) return; const which=drag.which; drag=null; snapCheck(which); }
+function snapCheck(which){
+  const T=CONFIG.SNAP_TOL;
+  if(which==='guide'){
+    if(Math.abs(playState.guide.x-LX)<T*1.6){ playState.guide.x=LX; playState.guide.y=CONFIG.GUIDE_TOPY; playState.guideOk=true; } else playState.guideOk=false;
+    gGuide.style.transition=`transform ${MOVE_MS}ms ease`; tr(gGuide, playState.guide.x, playState.guide.y);
+    gHandL.style.transition=`transform ${MOVE_MS}ms ease`; placeHandGuide(playState.guide.x, playState.guide.y);
+    if(playState.guideOk) enterPhase2();
+  }
+  else if(playState.phase===2){                       // ②をまず直線アにのせる
+    if(Math.abs(playState.slider.x-LX)<T*1.6){ playState.slider.x=LX; playState.slider.y=slRest(); playState.sliderOnLine=true; }
+    else playState.sliderOnLine=false;
+    animSlider();
+    if(playState.sliderOnLine) enterPhase3();
+  }
+  else{                                               // フェーズ3：アにそって点Aへスライド
+    playState.slider.x=LX;
+    if(Math.abs(playState.slider.y-slAlign())<T){ playState.slider.y=slAlign(); playState.sliderOk=true; }
+    else playState.sliderOk=false;
+    animSlider();
+    if(playState.sliderOk) enterPhase4();
+  }
+  checkComplete(); updatePlayHint(false);
+}
+function animSlider(){
+  gSlider.style.transition=`transform ${MOVE_MS}ms ease`; placeSlider(playState.slider.x, playState.slider.y);
+  gHandR.style.transition=`transform ${MOVE_MS}ms ease`; placeHandR(playState.slider.x, playState.slider.y);
+}
+function enterPhase2(){
+  playState.phase=2;
+  gGuide.classList.remove('grab');                    // ①はもう動かさない
+  // ②2まい目と右手を、最初から「②の上」に出す
+  gSlider.style.transition='none'; placeSlider(playState.slider.x, playState.slider.y); show(gSlider,true); gSlider.classList.add('grab');
+  gHandR.style.transition='none'; placeHandR(playState.slider.x, playState.slider.y); show(gHandR,true);
+  setPlayText();
+}
+function enterPhase3(){ playState.phase=3; setPlayText(); }   // ②は直線アにのった。次はスライド
+function enterPhase4(){
+  playState.phase=4;
+  gSlider.classList.remove('grab');                   // ②ももう動かさない
+  show(gHandR,false);                                 // 右手を消す
+  gHandL.style.transition=`transform ${MOVE_MS}ms ease`; // 左手を2まいをおさえる位置へ
+  placeHandBoth(); show(gHandL,true);
+  setPlayText();
+}
+function checkComplete(){
+  const ok=playState.guideOk&&playState.sliderOk;
+  $('btnDraw').disabled=!ok||playState.drawn;
+  if(ok&&!playState.drawn){ successText.textContent='いい ちょうし！'; showBadge(true); setTimeout(()=>{ if(!playState.drawn) showBadge(false); },1400); }
+}
+function playHintMessage(){
+  if(playState.drawn) return 'できたね！「はじめから」でもう一かいできるよ。';
+  if(!playState.guideOk) return 'まず <ruby>三角<rt>さんかく</rt></ruby>じょうぎを、<ruby>直線<rt>ちょくせん</rt></ruby>アに ぴったり<ruby>合<rt>あ</rt></ruby>わせよう。';
+  if(!playState.sliderOnLine) return 'もう1まいの<ruby>三角<rt>さんかく</rt></ruby>じょうぎを、<ruby>直線<rt>ちょくせん</rt></ruby>アに くっつけよう。';
+  if(!playState.sliderOk) return '<ruby>三角<rt>さんかく</rt></ruby>じょうぎにそって、<ruby>点<rt>てん</rt></ruby>Aまで すべらせよう。';
+  return '「<ruby>線<rt>せん</rt></ruby>をひく」ボタンが おせるよ！';
+}
+function updatePlayHint(open){ const b=$('hintBox'); b.innerHTML=playHintMessage(); b.classList.toggle('show',open); }
+$('btnHint').onclick=()=>{ const b=$('hintBox'); updatePlayHint(!b.classList.contains('show')); };
+$('btnReset').onclick=()=>setupPlay();
+$('btnDraw').onclick=()=>{
+  if($('btnDraw').disabled) return;
+  playState.drawn=true; $('btnDraw').disabled=true;
+  show(gHandR,false); show(gHandL,true); gHandL.style.transition='none'; placeHandBoth();
+  drawLineAnim(()=>playState&&playState.drawn);
+  setTimeout(()=>{ show(gGuide,false); show(gSlider,false); show(gHandL,false); show(gPencil,false);
+    successText.textContent='せいかい！できあがり！'; showBadge(true);
+    $('stepText').innerHTML='<ruby>三角<rt>さんかく</rt></ruby>じょうぎと<ruby>手<rt>て</rt></ruby>をどけて…… できあがり！'; }, DRAW_DELAY+DRAW_MS+400);
+  updatePlayHint(false);
+};
+
+gGuide.addEventListener('pointerdown', e=>startDrag('guide',e));
+gSlider.addEventListener('pointerdown', e=>startDrag('slider',e));
+svg.addEventListener('pointermove', moveDrag);
+svg.addEventListener('pointerup', endDrag);
+svg.addEventListener('pointercancel', endDrag);
+
+$('btnRandomD').onclick=randomOrient;
+$('btnRandomP').onclick=randomOrient;
+
+applyScene(0);
+setMode('demo');
+</script>
