@@ -24,7 +24,7 @@
  <button class="tab" data-f="fHenKaku">辺と角</button>
  <button class="tab" data-f="fTokucho">四角形の特ちょう</button>
  <button class="tab" data-f="fRenshu">練習問題</button>
- <span class="ver">v87</span>
+ <span class="ver">v88</span>
 </div>
 <div class="frames">
  <iframe id="fSagasu" class="show" title="平行・垂直な直線をさがす"></iframe>
@@ -6278,12 +6278,478 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
       t.classList.toggle('active', !!on);
     });
   }
+  window.showFrame = show;                     // 📝 テストの 練習 から タブを きりかえる
   tabs.forEach(function(t){ t.addEventListener('click', function(){
     show(t.dataset.g==='sakuzu' ? sakuzuCur : t.dataset.f);
   }); });
   // 「作図」の 中の 小さいタブ（各ページの header）から とどく メッセージ
   window.addEventListener('message', function(ev){
-    var d=ev.data; if(!d || d.type!=='sub') return; show(d.id);
+    var d=ev.data; if(!d || d.type!=='sub') return;
+    if(window.TestRun && TestRun.on()) return;   // 📝 テスト中は 作図の 小タブへ 行かない
+    show(d.id);
   });
 })();
 </script>
+
+<!-- ============================================================
+     📝 テストの 練習 ①せってい（アプリごとに ここだけ 直す）
+     ------------------------------------------------------------
+     mode に 書ける 名前（この アプリの 問題ページ）
+       sagasu   … 探す（meth:'perp' 垂直／'para' 平行／'mix' まぜる）
+       kakudo   … 角度（あ〜お の 5つで 1問）
+       henkaku  … 辺と角（meth:'P' 平行四辺形／'R' ひし形）
+       hyo      … 四角形の特ちょう「表」
+       zukei    … 四角形の特ちょう「図形」
+       kiritori … 練習問題「切って移動」
+       yontsume … 練習問題「平行四辺形のもう１点」（3つ そろって 1問）
+     ※「作図」の 4ページは お手本の アニメなので テストには 入れない。
+     ============================================================ -->
+<script>
+window.TEST_SETTEI = {
+  button: '📝 テストの 練習',
+  tests: [
+    { title:'垂直・平行の テスト', items:[
+      { no:'大問1', mode:'sagasu', meth:'perp', name:'垂直な 直線を さがす' },
+      { no:'大問2', mode:'sagasu', meth:'para', name:'平行な 直線を さがす' },
+      { no:'大問3', mode:'sagasu', meth:'mix',  name:'垂直・平行を さがす' },
+      { no:'大問4', mode:'kakudo' } ] },
+    { title:'四角形の テスト', items:[
+      { no:'大問1', mode:'henkaku', meth:'P' },
+      { no:'大問2', mode:'henkaku', meth:'R' },
+      { no:'大問3', mode:'hyo' },
+      { no:'大問4', mode:'zukei' },
+      { no:'大問5', mode:'kiritori' },
+      { no:'大問6', mode:'yontsume' } ] }
+  ]
+};
+</script>
+
+<!-- ============================================================
+     📝 テストの 練習 ②しくみ（test_renshu v1 の iframe版・2026-09-27）— ふだんは さわらない
+     もとの 取り出し版は zukei_base1 の 土台（MODES・setMode・showHanamaru・applyJudge）むけ。
+     この アプリは タブごとに 別の iframe(srcdoc) で、土台の 形が ちがうので、
+     「ページごとの つなぎ（下の PAGES）」を 足して 同じ うごきに した。
+     ・各ページの 中身は 1行も 直して いない。外から つつむ／見はる だけ。
+       探す・角度・辺と角 … Challenge10.done / miss を つつむ
+       表・図形・切って移動・もう１点 … はなまるの 画像（class show）と メッセージ（class bad）を 見はる
+     ・親の タブの しくみ（いちばん 下の script）には 2行だけ 足した
+       （window.showFrame ＝ タブを きりかえる／テスト中は 作図の 小タブの メッセージを むしする）。
+     ============================================================ -->
+<script>
+window.TestRun = (function(){
+  'use strict';
+  const S = window.TEST_SETTEI;
+  const $ = id => document.getElementById(id);
+  const frameWin = id => { const f = $(id); return f ? f.contentWindow : null; };
+  const clickIn = (d, sel) => { const e = d.querySelector(sel); if(e) e.click(); };
+
+  let run = null;        // { t, i, rec:[{miss,hint,st}], back, saved }
+  let myTimer = 0;
+  let opening = false;   // こちらから ボタンを おして いる あいだ（「とばす」に しない）
+
+  /* ---- 見はりの 手つだい ---- */
+  /* はなまるの 画像に class="show" が ついたら */
+  function watchShow(w, el, cb){
+    if(!el) return;
+    let was = el.classList.contains('show');
+    new w.MutationObserver(() => {
+      const now = el.classList.contains('show');
+      if(now && !was) cb();
+      was = now;
+    }).observe(el, { attributes:true, attributeFilter:['class'] });
+  }
+  /* メッセージに class="bad" が つくたびに（ok(文) が true の ときだけ まちがいに 数える）*/
+  function watchBad(w, el, ok, cb){
+    if(!el) return;
+    new w.MutationObserver(() => {
+      if(el.classList.contains('bad') && ok(el.textContent || '')) cb();
+    }).observe(el, { attributes:true, attributeFilter:['class'] });
+  }
+  /* 10問チャレンジの done / miss を つつむ（isFinal … 大問が ぜんぶ おわったか）*/
+  function hookC10(w, frame, isFinal, after){
+    const C = w.Challenge10; if(!C) return;
+    const _done = C.done, _miss = C.miss;
+    C.done = function(){
+      const r = _done.apply(this, arguments);
+      if(match(frame) && (!isFinal || isFinal(w))){ if(api.onDone(frame) && after) setTimeout(after, 0); }
+      return r;
+    };
+    C.miss = function(){
+      const r = _miss.apply(this, arguments);
+      if(match(frame)) api.miss(frame);
+      return r;
+    };
+  }
+
+  /* ---- ページごとの つなぎ ----
+     frame … iframe の id ／ label … 結果に 出す 名前
+     hook  … 1回だけ：はなまる・まちがい・ヒントを 見はる
+     open  … 大問を 出す たび：小タブを えらんで 新しい 問題に する
+     save / restore … テスト前の 小タブを おぼえて、おわったら もどす
+     skip  … テスト中は「とばす」に かわる ボタン ／ wait … はなまるから 次の 大問までの ms */
+  const KIND = { perp:'btnPerp', para:'btnPara', mix:'btnMix' };
+  const tokuchoSave    = (w,d) => { const b = d.querySelector('.tnb.on'); return b ? b.id : null; };
+  const tokuchoRestore = (w,d,s) => { const k = { tnHyo:'hyo', tnZu:'zu', tnTai:'tai' }[s]; if(k && w.showPane) w.showPane(k); };
+  const renshuSave     = (w,d) => { const b = d.querySelector('.pbtn.active'); return b ? b.dataset.p : null; };
+  const renshuRestore  = (w,d,s) => { if(s) clickIn(d, '.pbtn[data-p="'+s+'"]'); };
+
+  const PAGES = {
+    sagasu: { frame:'fSagasu', label:'平行・垂直な 直線を さがす',
+      hook(w,d){
+        /* 正解の あと、同じ タブの 次の 問題へ 行かないように（stopGo）*/
+        hookC10(w, 'fSagasu', null, () => { try{ w.stopGo(); }catch(e){} });
+        d.addEventListener('click', e => {
+          if(!e.target.closest('#btnTeach')) return;
+          let lk = false; try{ lk = w.eval('locked'); }catch(_){}
+          if(!lk) api.hint('fSagasu');
+        }, true);
+      },
+      open(w,d,meth){ if(KIND[meth]) d.getElementById(KIND[meth]).click(); w.newFigure(); },
+      save(w){ try{ return w.eval('kind'); }catch(e){ return null; } },
+      restore(w,d,s){ if(KIND[s]) d.getElementById(KIND[s]).click(); },
+      skip:'#btnRnd', wait:2300 },
+
+    kakudo: { frame:'fKakudo', label:'角度を もとめる',
+      hook(w){
+        hookC10(w, 'fKakudo', w => { try{ return w.eval('items.every(function(it){ return locked[it.key]; })'); }catch(e){ return true; } });
+      },
+      open(w){ w.newFigure(); },
+      skip:'#btnRnd', wait:2600 },
+
+    henkaku: { frame:'fHenKaku', label:'辺と角',
+      labelOf: m => m === 'R' ? 'ひし形の 辺と角' : '平行四辺形の 辺と角',
+      hook(w){ hookC10(w, 'fHenKaku'); },
+      open(w,d,meth){
+        let k = (meth === 'P' || meth === 'R') ? meth : null;
+        if(!k){ const b = d.querySelector('.hnb.on'); k = b ? b.dataset.k : 'P'; }
+        clickIn(d, '.hnb[data-k="'+k+'"]');
+        clickIn(d, '#rand'+k);
+      },
+      save(w,d){ const b = d.querySelector('.hnb.on'); return b ? b.dataset.k : null; },
+      restore(w,d,s){ if(s) clickIn(d, '.hnb[data-k="'+s+'"]'); },
+      skip:'#randP,#randR', wait:2500 },
+
+    hyo: { frame:'fTokucho', label:'四角形の 特ちょう（表）',
+      hook(w,d){
+        watchShow(w, d.getElementById('hana'), () => api.onDone('hyo'));
+        watchBad (w, d.getElementById('msg'), () => true, () => api.miss('hyo'));
+        /* 見出しの 形を タップして 対角線を 出したら ヒント */
+        d.addEventListener('click', e => {
+          const th = e.target.closest('thead th.head');
+          if(th && !th.classList.contains('dshow')) api.hint('hyo');
+        }, true);
+      },
+      open(w,d){
+        w.showPane('hyo');
+        clickIn(d, '#btnReset');
+        d.querySelectorAll('thead th.head.dshow').forEach(th => th.classList.remove('dshow'));
+      },
+      save:tokuchoSave, restore:tokuchoRestore, wait:2300 },
+
+    zukei: { frame:'fTokucho', label:'四角形の 特ちょう（図形）',
+      hook(w,d){
+        watchShow(w, d.getElementById('hanaZ'), () => api.onDone('zukei'));
+        /* 「まだ ひとつも えらんで いない」は まちがいに 数えない */
+        watchBad (w, d.getElementById('zmsg'), t => t.indexOf('まだ ひとつも') < 0, () => api.miss('zukei'));
+      },
+      open(w){ w.showPane('zu'); w.zNewQ(); },
+      save:tokuchoSave, restore:tokuchoRestore,
+      skip:'#btnZNext', wait:2500 },
+
+    kiritori: { frame:'fRenshu', label:'切って 移動（どんな 四角形？）',
+      hook(w,d){
+        watchShow(w, d.getElementById('hana'), () => api.onDone('kiritori'));
+        watchBad (w, d.getElementById('msg'), () => true, () => api.miss('kiritori'));
+      },
+      open(w,d){ clickIn(d, '.pbtn[data-p="p2"]'); clickIn(d, '#btnAgain'); },
+      save:renshuSave, restore:renshuRestore, wait:2300 },
+
+    yontsume: { frame:'fRenshu', label:'平行四辺形の もう１点',
+      hook(w,d){
+        watchShow(w, d.getElementById('hana4'), () => api.onDone('yontsume'));
+        /* 「そこは もう 頂点だよ」などは 数えない。平行四辺形に ならない 点だけ */
+        watchBad (w, d.getElementById('msg4'), t => t.indexOf('うーん') === 0, () => api.miss('yontsume'));
+      },
+      open(w,d){ clickIn(d, '.pbtn[data-p="p4"]'); clickIn(d, '#btnRandom4'); },
+      save:renshuSave, restore:renshuRestore,
+      skip:'#btnRandom4', wait:2600 }
+  };
+
+  /* ---- せっていを たしかめる（ない ページは とばす）---- */
+  if(!S || !Array.isArray(S.tests) || !S.tests.length){ console.warn('テストの練習：TEST_SETTEI.tests が ありません'); return null; }
+  if(typeof window.showFrame !== 'function'){ console.warn('テストの練習：タブの しくみ（showFrame）が ないので うごきません'); return null; }
+  const TESTS = S.tests.map(t => ({
+    title: t.title || 'テスト',
+    items: (t.items || []).filter(it => {
+      if(it && PAGES[it.mode] && $(PAGES[it.mode].frame)) return true;
+      console.warn('テストの練習：「' + (it && it.mode) + '」と いう ページは ないので とばします（' + t.title + '）');
+      return false;
+    })
+  })).filter(t => t.items.length);
+  if(!TESTS.length){ console.warn('テストの練習：出せる 大問が ありません'); return null; }
+
+  const itemName = it => it.name || (PAGES[it.mode].labelOf ? PAGES[it.mode].labelOf(it.meth) : PAGES[it.mode].label);
+  const curItem = () => run ? TESTS[run.t].items[run.i] : null;
+  const cur = () => run ? run.rec[run.i] : null;
+  /* key … ページの 名前（hyo など）か iframe の id（fSagasu など）*/
+  function match(key){
+    const it = curItem(); if(!it) return false;
+    return it.mode === key || PAGES[it.mode].frame === key;
+  }
+
+  /* ---- iframe の 用意（読みこみが まだなら まつ）---- */
+  function ready(frameId, fn){
+    const f = $(frameId), d = f.contentDocument;
+    if(d && d.URL === 'about:srcdoc' && d.readyState === 'complete' && d.body){ fn(f.contentWindow, d); return; }
+    f.addEventListener('load', () => fn(f.contentWindow, f.contentDocument), { once:true });
+  }
+  const FRAME_CSS = [
+    'body.testing #chal-mount{display:none !important;}',
+    'body.testing .hnb, body.testing .tnb, body.testing .pbtn, body.testing .snb,',
+    'body.testing .mode-btn:not(.rnd){pointer-events:none !important; opacity:.45;}'
+  ].join('\n');
+  /* 1つの iframe に 1回だけ：見た目・「とばす」・ページの 見はり */
+  function hookPage(key, w, d){
+    if(!w.__testRun){
+      w.__testRun = { pages:{} };
+      const st = d.createElement('style'); st.id = 'test-style'; st.textContent = FRAME_CSS;
+      d.head.appendChild(st);
+      const frame = PAGES[key].frame;
+      const skipSel = Object.keys(PAGES).filter(k => PAGES[k].frame === frame && PAGES[k].skip).map(k => PAGES[k].skip).join(',');
+      /* テストの あいだの「図をかえる」「次の もんだい」などは、その 大問を とばして 次の 大問へ */
+      if(skipSel) d.addEventListener('click', e => {
+        if(!run || opening || !match(frame)) return;
+        const b = e.target.closest(skipSel); if(!b) return;
+        e.stopPropagation(); e.preventDefault();
+        skip();
+      }, true);
+    }
+    if(!w.__testRun.pages[key]){
+      w.__testRun.pages[key] = true;
+      try{ PAGES[key].hook(w, d); }catch(e){ console.warn('テストの練習：' + key + ' の 見はりに しっぱい', e); }
+    }
+  }
+  /* テスト中の 見た目（10問チャレンジを 切る・「とばす」の 文字）*/
+  function frameTesting(frameId, on){
+    const f = $(frameId); if(!f) return;
+    const w = f.contentWindow, d = f.contentDocument; if(!d || !d.body) return;
+    d.body.classList.toggle('testing', on);
+    const skipSel = Object.keys(PAGES).filter(k => PAGES[k].frame === frameId && PAGES[k].skip).map(k => PAGES[k].skip).join(',');
+    if(skipSel) d.querySelectorAll(skipSel).forEach(b => {
+      if(on){ if(b.dataset.testOrig === undefined){ b.dataset.testOrig = b.innerHTML; b.innerHTML = '⏭ とばす'; } }
+      else if(b.dataset.testOrig !== undefined){ b.innerHTML = b.dataset.testOrig; delete b.dataset.testOrig; }
+    });
+    if(on && w.Challenge10 && w.Challenge10.isOn && w.Challenge10.isOn()){
+      opening = true; try{ clickIn(d, '#btn-challenge'); }finally{ opening = false; }
+    }
+  }
+
+  /* ---- 見た目（CSS は ここで 足す）---- */
+  const FONT = '"Hiragino Maru Gothic ProN","Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",system-ui,sans-serif';
+  const css = document.createElement('style');
+  css.id = 'test-style';
+  css.textContent = [
+    '#test-mount{position:relative;flex:0 0 auto;display:flex;align-items:center;margin-left:auto;}',
+    '#test-mount + .ver{margin-left:8px;}',
+    '#test-btn{font-family:'+FONT+';font-weight:800;font-size:clamp(13px,3.2vw,17px);padding:7px 16px;white-space:nowrap;',
+    '  color:#138577;background:#e3f6f2;border:3px solid #7fd3c6;border-radius:999px;cursor:pointer;-webkit-tap-highlight-color:transparent;}',
+    '#test-btn:focus-visible,#test-menu button:focus-visible,#test-bar button:focus-visible,#test-result button:focus-visible{outline:3px solid #ffd54a;outline-offset:2px;}',
+    '#test-menu{display:none;position:absolute;top:calc(100% + 8px);right:0;z-index:950;background:#fff;border:3px solid #7fd3c6;',
+    '  border-radius:16px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.25);flex-direction:column;gap:8px;min-width:270px;max-width:92vw;}',
+    '#test-menu.open{display:flex;}',
+    '#test-menu button{font-family:'+FONT+';font-weight:800;font-size:17px;padding:11px 14px;border-radius:12px;border:3px solid #7fd3c6;',
+    '  background:#fff;color:#2f6b3c;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:14px;white-space:nowrap;}',
+    '#test-menu button:hover{background:#f1fbf9;}',
+    '#test-menu small{font-size:14px;color:#6a7d6e;}',
+    '#test-bar{display:none;align-items:center;gap:8px;background:#fff;border:3px solid #7fd3c6;border-radius:999px;',
+    '  padding:3px 5px 3px 14px;font-family:'+FONT+';font-weight:800;color:#138577;white-space:nowrap;font-size:clamp(13px,3vw,17px);}',
+    '#test-dots{letter-spacing:1px;}',
+    '#test-skip{font-family:'+FONT+';font-weight:800;font-size:.9em;padding:4px 12px;border-radius:999px;border:2px solid #7fd3c6;background:#e3f6f2;color:#138577;cursor:pointer;}',
+    '#test-stop{font-family:'+FONT+';font-weight:800;font-size:.9em;padding:4px 12px;border-radius:999px;border:2px solid #c9d6cb;background:#fff;color:#5b6b5e;cursor:pointer;}',
+    'body.testing #test-btn{display:none;}',
+    'body.testing #test-bar{display:flex;}',
+    'body.testing .tabbar .tab{pointer-events:none;opacity:.45;}',
+    'body.testing .tabbar .lead{display:none;}',   // 帯が 入るように、テスト中は 左の 見出しを かくす
+    '#test-result{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;}',
+    '#test-result.show{display:flex;}',
+    '#test-result .tr-card{background:#fff;border-radius:20px;padding:22px 26px;box-shadow:0 10px 40px rgba(0,0,0,.3);max-width:94vw;max-height:92vh;overflow:auto;',
+    '  font-family:'+FONT+';font-weight:700;color:#2b2b2b;}',
+    '#test-result .tr-title{font-size:clamp(20px,3vw,28px);font-weight:800;color:#2f6b3c;text-align:center;margin-bottom:12px;}',
+    '#test-result table{border-collapse:collapse;font-size:clamp(14px,2vw,19px);margin:0 auto;}',
+    '#test-result td{padding:6px 10px;border-bottom:2px dashed #d7e8d9;white-space:nowrap;}',
+    '#test-result td.no{color:#5b6b5e;}',
+    '#test-result td.r-ok{color:#2f9e4a;}',
+    '#test-result td.r-ng{color:#e23c3c;}',
+    '#test-result td.r-sk{color:#9aa6b5;}',
+    '#test-result .tr-sum{text-align:center;margin-top:12px;font-size:clamp(16px,2.4vw,22px);}',
+    '#test-result .tr-sum b{color:#e23c3c;font-size:1.3em;}',
+    '#test-result .tr-btns{display:flex;gap:12px;justify-content:center;margin-top:16px;}',
+    '#test-result button{font-family:'+FONT+';font-weight:800;font-size:18px;padding:11px 20px;border-radius:14px;cursor:pointer;}',
+    '#test-again{color:#fff;background:#4a9e5c;border:none;box-shadow:0 3px 0 #3b824a;}',
+    '#test-close{color:#5b6b5e;background:#fff;border:2px solid #c9d6cb;}'
+  ].join('\n');
+  document.head.appendChild(css);
+
+  /* ---- ボタン・メニュー・帯（上の タブの 右はし）---- */
+  const mount = document.createElement('div');
+  mount.id = 'test-mount';
+  mount.innerHTML =
+      '<button id="test-btn" type="button">' + (S.button || '📝 テストの 練習') + '</button>'
+    + '<div id="test-menu">'
+    +   TESTS.map((t,k) => '<button type="button" data-k="'+k+'">'+t.title+'<small>'+t.items.length+'問</small></button>').join('')
+    + '</div>'
+    + '<div id="test-bar"><span id="test-no"></span><span id="test-dots"></span>'
+    +   '<button id="test-skip" type="button">⏭ とばす</button><button id="test-stop" type="button">やめる</button></div>';
+  const tabbar = document.querySelector('.tabbar');
+  const ver = tabbar && tabbar.querySelector('.ver');
+  if(ver) tabbar.insertBefore(mount, ver);
+  else if(tabbar) tabbar.appendChild(mount);
+  else document.body.insertBefore(mount, document.body.firstChild);
+  const res = document.createElement('div');
+  res.id = 'test-result';
+  document.body.appendChild(res);
+
+  const menu = $('test-menu');
+  $('test-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    if(TESTS.length === 1){ start(0); return; }
+    menu.classList.toggle('open');
+    if(menu.classList.contains('open')) placeMenu();
+  });
+  function placeMenu(){
+    menu.style.left = ''; menu.style.right = '';
+    const r = menu.getBoundingClientRect(), mr = mount.getBoundingClientRect();
+    if(r.left < 8){ menu.style.right = 'auto'; menu.style.left = (8 - mr.left) + 'px'; }
+  }
+  menu.addEventListener('click', e => {
+    const b = e.target.closest('button[data-k]'); if(!b) return;
+    menu.classList.remove('open');
+    start(+b.dataset.k);
+  });
+  document.addEventListener('click', e => { if(!e.target.closest('#test-mount')) menu.classList.remove('open'); });
+  window.addEventListener('blur', () => menu.classList.remove('open'));   // iframe の 中を おしたとき
+  document.addEventListener('keydown', e => { if(e.key === 'Escape') menu.classList.remove('open'); });
+  $('test-stop').addEventListener('click', () => stop());
+  /* ページに「次の もんだい」が ない とき（表・切って移動）だけ 帯に 出す */
+  $('test-skip').addEventListener('click', () => skip());
+
+  /* ---- 中身 ---- */
+  function clearMine(){ clearTimeout(myTimer); myTimer = 0; }
+  function bar(){
+    if(!run) return;
+    const T = TESTS[run.t], it = T.items[run.i];
+    $('test-no').textContent = '📝 ' + (/^\d+$/.test(it.no) ? it.no+'問め' : it.no) + '（' + (run.i+1) + '／' + T.items.length + '）';
+    $('test-skip').style.display = PAGES[it.mode].skip ? 'none' : '';
+    $('test-dots').textContent = run.rec.map((r,i) => r.st==='done' ? '●' : r.st==='skip' ? '－' : (i===run.i ? '◎' : '○')).join('');
+  }
+  const framesOf = t => TESTS[t].items.map(it => PAGES[it.mode].frame).filter((f,i,a) => a.indexOf(f) === i);
+  const shownFrame = () => { const f = document.querySelector('.frames iframe.show'); return f ? f.id : null; };
+
+  function go(i){
+    clearMine();
+    run.i = i;
+    const it = curItem(), P = PAGES[it.mode], myRun = run;
+    window.showFrame(P.frame);
+    bar();
+    ready(P.frame, (w,d) => {
+      if(run !== myRun || run.i !== i) return;
+      hookPage(it.mode, w, d);
+      opening = true;
+      try{ P.open(w, d, it.meth); }
+      catch(e){ console.warn('テストの練習：' + it.mode + ' を 開けませんでした', e); }
+      finally{ opening = false; }
+    });
+  }
+  function start(t){
+    res.classList.remove('show');
+    let back = shownFrame(), saved = {};
+    if(run){ back = run.back; saved = run.saved; }
+    run = { t:t, i:0, rec:TESTS[t].items.map(() => ({ miss:0, hint:false, st:'todo' })), back:back, saved:saved };
+    document.body.classList.add('testing');
+    /* テスト前の 小タブを おぼえる（ページごとに 1回だけ）*/
+    TESTS[t].items.forEach(it => {
+      const P = PAGES[it.mode];
+      ready(P.frame, (w,d) => {
+        hookPage(it.mode, w, d);
+        if(P.save && !(it.mode in run.saved)){ try{ run.saved[it.mode] = P.save(w, d); }catch(e){} }
+      });
+    });
+    framesOf(t).forEach(f => ready(f, () => { if(run) frameTesting(f, true); }));
+    go(0);
+  }
+  function next(){
+    if(!run) return;
+    if(run.i + 1 < run.rec.length) go(run.i + 1);
+    else finish();
+  }
+  function skip(){
+    const r = cur(); if(!r) return;
+    if(r.st !== 'done') r.st = 'skip';
+    next();
+  }
+  function finish(){
+    clearMine();
+    const T = TESTS[run.t];
+    let perfect = 0;
+    const rows = T.items.map((it,i) => {
+      const r = run.rec[i];
+      let tx, c;
+      if(r.st==='done' && r.miss===0){ tx = '⭕ ノーミス'; c = 'r-ok'; perfect++; }
+      else if(r.st==='done'){ tx = 'まちがい '+r.miss+'回'; c = 'r-ng'; }
+      else { tx = 'とばした'; c = 'r-sk'; }
+      return '<tr><td class="no">'+it.no+'</td><td>'+itemName(it)+'</td><td class="'+c+'">'+tx+'</td><td>'+(r.hint ? '💡' : '')+'</td></tr>';
+    }).join('');
+    res.innerHTML = '<div class="tr-card">'
+      + '<div class="tr-title">📝 '+T.title+'　おわり！</div>'
+      + '<table>'+rows+'</table>'
+      + '<div class="tr-sum">ノーミスで できた 問題　<b>'+perfect+'</b> ／ '+T.items.length+'</div>'
+      + '<div class="tr-btns"><button id="test-again" type="button">もう一度</button><button id="test-close" type="button">とじる</button></div>'
+      + '</div>';
+    res.classList.add('show');
+    $('test-again').onclick = () => start(run.t);
+    $('test-close').onclick = () => stop();
+    $('test-again').focus();
+  }
+  /* やめる／とじる：小タブを もどして、はじめの タブへ */
+  function stop(){
+    if(!run) return;
+    const back = run.back, saved = run.saved, t = run.t;
+    run = null;
+    clearMine();
+    res.classList.remove('show');
+    document.body.classList.remove('testing');
+    framesOf(t).forEach(f => frameTesting(f, false));
+    Object.keys(saved).forEach(key => {
+      const P = PAGES[key], f = $(P.frame);
+      opening = true;
+      try{ if(P.restore && saved[key] != null) P.restore(f.contentWindow, f.contentDocument, saved[key]); }catch(e){}
+      finally{ opening = false; }
+    });
+    window.showFrame(back || PAGES[TESTS[t].items[0].mode].frame);
+  }
+
+  const api = {
+    on: () => !!run,
+    /* はなまるが 出た：その 大問は おわり。少し まって 次の 大問へ */
+    onDone(key){
+      if(!run || res.classList.contains('show') || !match(key)) return false;
+      const r = cur(); if(r.st !== 'todo') return false;
+      r.st = 'done';
+      bar();
+      clearMine();
+      myTimer = setTimeout(next, PAGES[curItem().mode].wait || 2500);
+      return true;
+    },
+    /* まちがい（はなまるの あとは 数えない）*/
+    miss(key){ if(!run || !match(key)) return; const r = cur(); if(r.st === 'todo') r.miss++; },
+    /* ヒントを 見た */
+    hint(key){ if(!run || !match(key)) return; const r = cur(); if(r.st === 'todo') r.hint = true; },
+    /* 外から つかう とき用 */
+    start: t => start(t || 0),
+    stop:  () => stop(),
+    record: () => run ? JSON.parse(JSON.stringify(run.rec)) : null
+  };
+  return api;
+})();
+</script>
+<!-- 📝 テストの 練習 ここまで -->
