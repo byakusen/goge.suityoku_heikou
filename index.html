@@ -24,7 +24,7 @@
  <button class="tab" data-f="fHenKaku">辺と角</button>
  <button class="tab" data-f="fTokucho">四角形の特ちょう</button>
  <button class="tab" data-f="fRenshu">練習問題</button>
- <span class="ver">v88</span>
+ <span class="ver">v89</span>
 </div>
 <div class="frames">
  <iframe id="fSagasu" class="show" title="平行・垂直な直線をさがす"></iframe>
@@ -589,6 +589,27 @@ function hanamaruDraw(g,cx,cy,R){
   el(g,'path',{d:d+'Z', fill:'#fff', 'fill-opacity':.9, stroke:'var(--red)', 'stroke-width':6, 'stroke-linejoin':'round'});
   el(g,'circle',{cx, cy, r:R*0.62, fill:'none', stroke:'var(--red)', 'stroke-width':6});
 }
+/* v89：直角マーク。2本の 直線の 交わる 点に、それぞれの 線の まん中の ほうへ 小さい 四角 */
+function crossPt(l1,l2){                 // 2本の 直線の 交わる 点
+  const u1={x:Math.cos(l1.ang*RAD), y:Math.sin(l1.ang*RAD)}, u2={x:Math.cos(l2.ang*RAD), y:Math.sin(l2.ang*RAD)};
+  const den=u1.x*u2.y-u1.y*u2.x; if(Math.abs(den)<1e-9) return null;
+  const dx=l2.P.x-l1.P.x, dy=l2.P.y-l1.P.y, s=(dx*u2.y-dy*u2.x)/den;
+  return {x:l1.P.x+u1.x*s, y:l1.P.y+u1.y*s};
+}
+function rightMark(g,l1,l2,X,H){
+  const u1={x:Math.cos(l1.ang*RAD), y:Math.sin(l1.ang*RAD)}, u2={x:Math.cos(l2.ang*RAD), y:Math.sin(l2.ang*RAD)};
+  /* 4つの すみの うち、はなまる（H）から いちばん はなれた ほうに つける */
+  const k=36;
+  let a=u1, b=u2, best=-1;
+  [[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([s1,s2])=>{
+    const ca={x:u1.x*s1,y:u1.y*s1}, cb={x:u2.x*s2,y:u2.y*s2};
+    const C={x:X.x+(ca.x+cb.x)*k/2, y:X.y+(ca.y+cb.y)*k/2};
+    const d=Math.hypot(C.x-H.x, C.y-H.y); if(d>best){ best=d; a=ca; b=cb; }
+  });
+  const p1={x:X.x+a.x*k, y:X.y+a.y*k}, p2={x:X.x+(a.x+b.x)*k, y:X.y+(a.y+b.y)*k}, p3={x:X.x+b.x*k, y:X.y+b.y*k};
+  el(g,'path',{d:`M ${X.x} ${X.y} L ${p1.x} ${p1.y} L ${p2.x} ${p2.y} L ${p3.x} ${p3.y} Z`,
+    fill:'var(--ok)','fill-opacity':.2, stroke:'var(--ok)','stroke-width':4.5,'stroke-linejoin':'round'});
+}
 function batsu(g,cx,cy,R){
   el(g,'circle',{cx, cy, r:R*1.25, fill:'#fff', 'fill-opacity':.85});
   const o={stroke:'var(--red)', 'stroke-width':7, 'stroke-linecap':'round'};
@@ -634,7 +655,15 @@ function choose(i){
     l.el.setAttribute('stroke','var(--ok)'); l.el.setAttribute('stroke-width',6);
     l.ring.setAttribute('stroke','var(--ok)'); l.ring.setAttribute('stroke-width',3.5);
     l.txt.setAttribute('fill','var(--ok)');
-    $('marks').innerHTML=''; hanamaru($('marks'), mid.x, mid.y, 40);
+    /* v89：垂直の 正解は 直角マーク。はなまるが 交わる 点に かさなる ときは、線に そって ずらす */
+    let hp=mid; const X=(q.rel==='perp')? crossPt(L[q.i], l) : null;
+    if(X && Math.hypot(mid.x-X.x, mid.y-X.y)<130){
+      const e=(Math.hypot(l.a.x-X.x,l.a.y-X.y) > Math.hypot(l.b.x-X.x,l.b.y-X.y))? l.a : l.b;
+      const d=Math.hypot(e.x-X.x, e.y-X.y)||1;
+      hp={x:X.x+(e.x-X.x)/d*130, y:X.y+(e.y-X.y)/d*130};
+    }
+    $('marks').innerHTML=''; hanamaru($('marks'), hp.x, hp.y, 40);
+    if(X) rightMark($('marks'), L[q.i], l, X, hp);
     playOK();                          /* ★v51：はなまると いっしょに 正解の 音 */
     const more=q.ans.length>1? `（${q.ans.map(k=>L[k].lab).join('と')} の どちらでも 正解）` : '';
     say(`正解！ ${L[q.i].lab} と ${l.lab} は ${q.rel==='para'?'平行':'垂直'}。${more}`);
@@ -3629,6 +3658,11 @@ render(0);
   .key.zero{grid-column:2}
   .key.del{grid-column:3; font-size:clamp(13px,2.3vh,17px); border-color:#b9bdb9; color:#6b706b; box-shadow:0 4px 0 #dcdfdc}
   .pad.lock{opacity:.42; pointer-events:none}
+  /* v89：ヒントボタン（図に 180°の 赤かっこ・上に 式を 出す） */
+  .hintbtn{font-family:inherit; font-size:clamp(15px,3vh,20px); font-weight:800; height:clamp(38px,7vh,50px); padding:0;
+    border-radius:12px; background:#fff8dc; color:#8a5b00; border:3px solid #e6c65a; box-shadow:0 4px 0 #ecd98f; cursor:pointer}
+  .hintbtn:active{transform:translateY(3px); box-shadow:0 1px 0 #ecd98f}
+  .hintbtn:disabled{opacity:.42; cursor:default}
   footer{flex:0 0 auto; background:var(--green-l); border-top:3px solid var(--green); padding:9px 14px 11px}
   .panel{max-width:900px; margin:0 auto}
   .steprow{display:flex; align-items:center; gap:11px}
@@ -3659,6 +3693,7 @@ render(0);
       <rect width="880" height="600" fill="url(#min)"/>
       <g id="fig"></g>       <!-- 直線・ラベル（カキクケ） -->
       <g id="marks"></g>     <!-- 角の 弧・数字・？ -->
+      <g id="hintg"></g>     <!-- v89：ヒント（180°の 赤かっこ・式） -->
       <g id="hana"></g>      <!-- はなまる -->
     </svg>
   </div>
@@ -3666,6 +3701,7 @@ render(0);
 <aside class="side">
   <div class="ansbox" id="ansK"><span class="v" id="numK"></span><span class="ph" id="phK"></span><span class="u">°</span></div>
   <div class="pad" id="keysK"></div>
+  <button class="hintbtn" id="btnHint" type="button">&#128161; ヒント</button>
 </aside>
 </div>
 
@@ -4022,7 +4058,7 @@ function drawGiven(){
   const a0=angOf(R), del=shortDelta(a0,angOf(U));
   el(g,'path',{d:arcPath(c,30,a0,a0+del),fill:'none',stroke:'var(--red)','stroke-width':3});
   const lp=polar(c,54,a0+del/2);
-  el(g,'text',{x:lp.x,y:lp.y+8,'font-size':24,'font-weight':800,fill:'var(--red)','text-anchor':'middle'},`${baseAng}°`);
+  el(g,'text',{x:lp.x,y:lp.y+10,'font-size':28,'font-weight':800,fill:'var(--red)','text-anchor':'middle'},`${baseAng}°`);
 }
 function drawMarks(){
   const g=$('marks'); clr(g); drawGiven();
@@ -4033,10 +4069,14 @@ function drawMarks(){
     // 弧
     el(g,'path',{d:arcPath(it.center,26,it.a0,it.a1),fill:'none',stroke:col,'stroke-width':solved?3.5:3, 'data-i':idx, class:'clk'});
     // 数字 or かな。正解後も かな を のこす（ヒントで「あと…」と 言うため）
-    const solvedR=54, unsolvedR=46;
+    /* v89：正解の 数字は 大きく（26px）、「あ=」は つけない。
+       せまい 角でも 線に かからない ように、角の 広さに あわせて 外へ はなす */
+    const half=Math.abs(it.a1-it.a0)/2*RAD;
+    const solvedR=Math.min(112, Math.max(62, (String(it.ans).length*8+14)/Math.sin(half))), unsolvedR=46;
     const lp=polar(it.center, solved?solvedR:unsolvedR, it.mid);
-    const txt = solved? `${it.key}=${it.ans}°` : it.key;
-    el(g,'text',{x:lp.x,y:lp.y+7,'font-size':solved?18:22,'font-weight':800,fill:col,'text-anchor':'middle','data-i':idx, class:'clk'}, txt);
+    const txt = solved? `${it.ans}°` : it.key;
+    el(g,'text',{x:lp.x,y:lp.y+(solved?9:7),'font-size':solved?26:22,'font-weight':800,fill:col,'text-anchor':'middle','data-i':idx, class:'clk',
+      stroke:'#fff','stroke-width':solved?5:0,'paint-order':'stroke','stroke-linejoin':'round'}, txt);
     // タップ しやすい 透明の まる（まだ とけて いない ものだけ）
     if(!solved){ const tp=polar(it.center,unsolvedR,it.mid);
       el(g,'circle',{cx:tp.x,cy:tp.y-4,r:30,fill:'transparent','data-i':idx, class:'clk'}); }
@@ -4089,6 +4129,7 @@ function pick(idx){
   const it=items[idx];
   say(`<b style="color:var(--ask)">${it.key}</b> は 何度？ 右の キーで 入れよう。`);
   $('hintBox').classList.remove('show');
+  clr($('hintg')); $('btnHint').disabled=false;
   need=String(it.ans).length; clearAns(); lockPad(false);
   Challenge10.newProblem();            /* ★10問チャレンジ：1つの 角が 1問 */
 }
@@ -4106,12 +4147,14 @@ function answer(v){
     drawMarks();
     say(`正解！ ${it.key} = ${it.ans}° （${it.why}）`);
     $('hintBox').classList.remove('show');
+    clr($('hintg')); $('btnHint').disabled=true;
     setProgress();
-    hanamaru(440, 300, 130); playOK();
-    // はなまるが 消えたら 次の 角へ（さいごの 1問なら おしまいの メッセージ）
+    playOK();
+    /* v89：はなまるは あ〜お ぜんぶ 正解した ときだけ（1つずつは 音と みどりの 数字だけ） */
     Challenge10.done();                  /* ★10問チャレンジ：1問 できた */
-    if(!Challenge10.isOn())              /* チャレンジ中は モジュールが 次へ 進める */
-      nextTimer=setTimeout(()=>{ nextTimer=null; nextItem(); }, 2800);
+    if(done>=5) finish();
+    else if(!Challenge10.isOn())         /* チャレンジ中は モジュールが 次へ 進める */
+      nextTimer=setTimeout(()=>{ nextTimer=null; nextItem(); }, 1500);
   }else{
     Challenge10.miss();                  /* ★10問チャレンジ：まちがえた */
     ngK=true; ansBoxK.className='ansbox ng';
@@ -4127,6 +4170,62 @@ function hintFor(it){
   if(it.key==='え') return `い の 向かい（対頂角）は 同じ 角。`;
   return `クとケは 平行。い と 同じ 位置（同位角）だよ。`;
 }
+
+/* ============ v89：ヒントボタン ============
+   い・う・え … となりの 角と あわせた 180°に 赤かっこ。上に「180° − 60° ＝ ？°」
+   あ・お    … 同じ 位置の 角（同位角）を 赤く。上に「60° と 同じ 大きさ」 */
+function showHint(){
+  if(sel==null) return;
+  const g=$('hintg'); clr(g);
+  const it=items[sel], A=items[0], I=items[1], U=items[2];
+  const RED='var(--red)';
+  const angOf=(v)=>Math.atan2(v.y,v.x)/RAD;
+  const Rv=angOf({x:1,y:0}), Lv=angOf({x:-1,y:0}), Uv=angOf(dirv), Dv=angOf({x:-dirv.x,y:-dirv.y});
+  /* 赤かっこ：c を 中心に from → mid → to の 半円（180°） */
+  function bracket(c, from, mid, to){
+    const r=92, p0=polar(c,r,from), pm=polar(c,r,mid), p1=polar(c,r,to);
+    const sw=shortDelta(from,mid)>0?1:0;
+    el(g,'path',{d:`M ${p0.x} ${p0.y} A ${r} ${r} 0 0 ${sw} ${pm.x} ${pm.y} A ${r} ${r} 0 0 ${sw} ${p1.x} ${p1.y}`,
+      fill:'none',stroke:RED,'stroke-width':5,'stroke-linecap':'round'});
+    [p0,p1].forEach(p=>{ const q=polar(c,r-14,angOf({x:p.x-c.x,y:p.y-c.y}));   // かっこの はしを 内へ まげる
+      el(g,'line',{x1:p.x,y1:p.y,x2:q.x,y2:q.y,stroke:RED,'stroke-width':5,'stroke-linecap':'round'}); });
+    const lp=polar(c,r+24,mid);
+    el(g,'text',{x:lp.x,y:lp.y+10,'font-size':28,'font-weight':800,fill:RED,'text-anchor':'middle',
+      stroke:'#fff','stroke-width':6,'paint-order':'stroke','stroke-linejoin':'round'},'180°');
+  }
+  /* わかって いる 角を 赤く なぞる */
+  function redArc(w,r){ el(g,'path',{d:arcPath(w.center,r||26,w.a0,w.a1),fill:'none',stroke:RED,'stroke-width':6}); }
+  /* 上に 出す 式 */
+  function formula(txt){
+    const t=el(g,'text',{x:440,y:62,'font-size':34,'font-weight':800,fill:RED,'text-anchor':'middle'},txt);
+    const b=t.getBBox();
+    const bg=document.createElementNS(NS,'rect');
+    bg.setAttribute('x',b.x-18); bg.setAttribute('y',b.y-8); bg.setAttribute('width',b.width+36); bg.setAttribute('height',b.height+16);
+    bg.setAttribute('rx',14); bg.setAttribute('fill','#fff'); bg.setAttribute('stroke',RED); bg.setAttribute('stroke-width',3);
+    g.insertBefore(bg,t);
+  }
+  const c=P.KuKi;
+  if(it.key==='あ'){            // 手がかりの 角と 同位角
+    el(g,'path',{d:arcPath(P.KuKa,30,Rv,Uv),fill:'none',stroke:RED,'stroke-width':6});
+    redArc(it,26);
+    formula(`${baseAng}° と 同じ 大きさ（同じ 位置の 角）`);
+  }else if(it.key==='い'){      // あ ＋ い ＝ 180°（キの 上がわ）
+    bracket(c, Rv, Rv-90, Lv); redArc(A);
+    formula(`180° − ${A.ans}° ＝ ？°`);
+  }else if(it.key==='う'){      // い ＋ う ＝ 180°（クの 左がわ）
+    bracket(c, Uv, Lv, Dv); redArc(I);
+    formula(`180° − ${I.ans}° ＝ ？°`);
+  }else if(it.key==='え'){      // う ＋ え ＝ 180°（キの 下がわ）
+    bracket(c, Lv, Lv-90, Rv); redArc(U);
+    formula(`180° − ${U.ans}° ＝ ？°`);
+  }else{                        // お … い と 同位角
+    redArc(I); redArc(it);
+    formula(`${I.ans}° と 同じ 大きさ（同じ 位置の 角）`);
+  }
+  $('hintBox').innerHTML = hintFor(it);
+  $('hintBox').classList.add('show');
+}
+$('btnHint').onclick=showHint;
 
 /* ============ はなまる（わたされた 画像）＋音 ============ */
 const HANA_URL=HANA_B64;
@@ -4163,6 +4262,8 @@ function beepOK(){
 function playOK(){ if(SE){ try{ SE.pause(); SE.currentTime=0; const p=SE.play(); if(p&&p.catch)p.catch(()=>beepOK()); return; }catch(e){} } beepOK(); }
 function finish(){
   sel=null; lockPad(true); clearAns();
+  clr($('hintg')); $('btnHint').disabled=true;
+  hanamaru(440, 300, 130);             /* v89：はなまるは ここ（ぜんぶ 正解）だけ */
   say('ぜんぶ 正解！ よく できました。 右上の <b>図をかえる</b> で 次へ。');
 }
 
@@ -4173,7 +4274,7 @@ function newFigure(){
   clr($('hana'));
   const nt=TS[Math.floor(Math.random()*TS.length)];
   setFig(nt,1);   // 斜めは つねに 右上がり（教科書と 同じ 向き。手がかりの 角は かならず 鋭角）
-  drawFig(); drawMarks();
+  drawFig(); drawMarks(); clr($('hintg'));
   $('hintBox').classList.remove('show'); setProgress();
   nextItem();
 }
@@ -6410,8 +6511,9 @@ window.TestRun = (function(){
       skip:'#btnRnd', wait:2300 },
 
     kakudo: { frame:'fKakudo', label:'角度を もとめる',
-      hook(w){
+      hook(w,d){
         hookC10(w, 'fKakudo', w => { try{ return w.eval('items.every(function(it){ return locked[it.key]; })'); }catch(e){ return true; } });
+        d.addEventListener('click', e => { if(e.target.closest('#btnHint')) api.hint('fKakudo'); }, true);
       },
       open(w){ w.newFigure(); },
       skip:'#btnRnd', wait:2600 },
