@@ -24,7 +24,7 @@
  <button class="tab" data-f="fHenKaku">辺と角</button>
  <button class="tab" data-f="fTokucho">四角形の特ちょう</button>
  <button class="tab" data-f="fRenshu">練習問題</button>
- <span class="ver">v89</span>
+ <span class="ver">v91</span>
 </div>
 <div class="frames">
  <iframe id="fSagasu" class="show" title="平行・垂直な直線をさがす"></iframe>
@@ -1388,6 +1388,19 @@ setMode('demo');
 const CONFIG = { LINE_Y:390, A_X:490, A_Y:150, RAIL_X:320, GUIDE_BOT:600, SNAP2D:64, SNAP_Y:46, STEP_MS:1900 };
 const LY=CONFIG.LINE_Y, AX=CONFIG.A_X, AY=CONFIG.A_Y, RX=CONFIG.RAIL_X;
 const MOVE_MS=1000, DRAW_DELAY=500, DRAW_MS=1200;
+/* ★v91：ひく 線の 右はし。三角じょうぎ①の 画像が 読めたら、その 作図辺の はし（とがった 角の 少し 手前）まで。
+   画像の 作図辺は 直角から 約297（大きさ300の とき）。とがった 先の 少し 手前 280 で 止める。
+   読めない ときの SVG（450×300）は 線より 長いので、もとの 640 の まま。 */
+const DRAW_X1=350, DRAW_EDGE_PNG=280;
+let DRAW_X2=640;
+const DL=()=>DRAW_X2-DRAW_X1;            // 線の 長さ（点線アニメの 長さにも 使う）
+function setDrawEnd(x2){
+  const ln=document.getElementById('drawnLine'); if(!ln) return;
+  const shown = ln.getAttribute('stroke-dashoffset')==='0';
+  DRAW_X2=x2;
+  ln.setAttribute('x2',x2); ln.setAttribute('stroke-dasharray',DL());
+  ln.style.transition='none'; ln.setAttribute('stroke-dashoffset', shown?0:DL());
+}
 
 /* ★v43：手・えんぴつは base64 で ファイルに 埋めこみ（もとは GitHub から 読んでいた）。
    ネットに つながらない 教室でも、リポジトリを 消しても 消えない。
@@ -1442,6 +1455,7 @@ function initRuler(r){
     if(t.trim()) img.setAttribute('transform',t.trim()); else img.removeAttribute('transform');
     img.setAttribute('href',r.url); img.setAttributeNS('http://www.w3.org/1999/xlink','href',r.url);
     img.style.display=''; fb.style.display='none';
+    if(r===RULERS.draw) setDrawEnd(Math.min(640, RX+DRAW_EDGE_PNG*(H/300)));   // ★v91
   };
   probe.onerror=()=>{ img.style.display='none'; fb.style.display=''; };
   probe.src=r.url;
@@ -1496,9 +1510,9 @@ function showBadge(on){ successBadge.classList.toggle('hidden',!on); successBadg
 
 function drawLineAnim(guard){
   gPencil.style.transition='none'; tr(gPencil,350,AY,`rotate(${HR(0)})`); show(gPencil,true);
-  drawnLine.style.transition='none'; drawnLine.setAttribute('stroke-dashoffset',290);
+  drawnLine.style.transition='none'; drawnLine.setAttribute('stroke-dashoffset',DL());
   setTimeout(()=>{ if(guard && !guard()) return;
-    gPencil.style.transition=`transform ${DRAW_MS}ms ease`; tr(gPencil,640,AY,`rotate(${HR(0)})`);
+    gPencil.style.transition=`transform ${DRAW_MS}ms ease`; tr(gPencil,DRAW_X2,AY,`rotate(${HR(0)})`);
     drawnLine.style.transition=`stroke-dashoffset ${DRAW_MS}ms ease`; drawnLine.setAttribute('stroke-dashoffset',0);
   },DRAW_DELAY);
 }
@@ -1528,7 +1542,7 @@ function setHandL(kind,animate){
 }
 function introState(){
   placeG(gDraw,false); show(gGuide,false); placeG(gHandL,false); placeG(gHandR,false); show(gPencil,false); show(raMark,false);
-  drawnLine.style.transition='none'; drawnLine.setAttribute('stroke-dashoffset',290); showBadge(false);
+  drawnLine.style.transition='none'; drawnLine.setAttribute('stroke-dashoffset',DL()); showBadge(false);
   $('stepNo').textContent='▶';
   $('stepText').innerHTML='はじめは 点Aとアの線だけ。「さいしょから」か「次へ ▶」でスタート。';
   $('progress').textContent=`0 / ${NSTEP}`;
@@ -1544,9 +1558,9 @@ function applyStep(n,animate=true){
 
   if(s.pencil){
     if(n===4 && animate){ setTimeout(()=>{ if(currentStep===4) drawLineAnim(()=>currentStep===4); }, MOVE_MS); }  // 手を動かしてから
-    else { show(gPencil,true); gPencil.style.transition='none'; tr(gPencil,640,AY,`rotate(${HR(0)})`); drawnLine.style.transition='none'; drawnLine.setAttribute('stroke-dashoffset',0); }
+    else { show(gPencil,true); gPencil.style.transition='none'; tr(gPencil,DRAW_X2,AY,`rotate(${HR(0)})`); drawnLine.style.transition='none'; drawnLine.setAttribute('stroke-dashoffset',0); }
   }else{
-    show(gPencil,false); drawnLine.style.transition='none'; drawnLine.setAttribute('stroke-dashoffset', s.line?0:290);
+    show(gPencil,false); drawnLine.style.transition='none'; drawnLine.setAttribute('stroke-dashoffset', s.line?0:DL());
   }
 
   if(n===4){ successText.textContent='平行な直線がひけたね！'; }
@@ -1591,7 +1605,7 @@ let playState=null;
 const DRAW_START={x:RX+85,y:LY+35};
 function setupPlay(){
   showBadge(false);
-  drawnLine.style.transition='none'; drawnLine.setAttribute('stroke-dashoffset',290);
+  drawnLine.style.transition='none'; drawnLine.setAttribute('stroke-dashoffset',DL());
   show(raMark,false); show(gPencil,false);
   playState={ phase:1, draw:{x:DRAW_START.x,y:DRAW_START.y}, onLine:false, atA:false, drawn:false };
   gDraw.style.transition='none'; placeDraw(playState.draw.x,playState.draw.y); show(gDraw,true); gDraw.classList.add('grab');
@@ -2340,7 +2354,11 @@ function setPgDraw(edge_lx,edge_ly){ pgDraw.setAttribute('transform',`translate(
    ★v20：450 は「読めなかったときのSVG」の幅であって、PNGの幅ではなかった。
    PNGが読めていれば その実寸(PGR.draw.W)を使う。読めなければ SVG の 450。 */
 const PG_EDGE_FB=450;
-function pgEdgeLen(){ return (PGR.draw.W||PG_EDGE_FB)*PG_SC; }
+/* ★v91：PNG の 幅(W)は 作図辺より 長かった（線が 三角じょうぎの 先から はみ出して いた）。
+   作図辺は 直角から 約297（大きさ300の とき）。とがった 先の 少し 手前 280 までを ひける ところに する。
+   平行タブの DRAW_EDGE_PNG と 同じ 値。 */
+const PG_EDGE_PNG=280;
+function pgEdgeLen(){ return (PGR.draw.W ? PG_EDGE_PNG*((PGR.draw.H||300)/300) : PG_EDGE_FB)*PG_SC; }
 /* 線を「はじめから t1 の割合まで」あらわす（t0＝すでにひけている割合） */
 async function drawLinePart(el,pts,t0,t1,dur){
   const len=Math.hypot(pts[1].x-pts[0].x, pts[1].y-pts[0].y);
@@ -4382,6 +4400,13 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
   #hana{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:clamp(150px,44vw,230px);
     pointer-events:none; opacity:0; filter:drop-shadow(0 6px 12px rgba(0,0,0,.25))}
 
+  /* 💡 ヒント（v90）… 文ではなく 図に しるしを 出す */
+  .btns button.hintbtn{border:3px solid #e6c65a; background:#fff8dc; color:#8a5b00; box-shadow:0 4px 0 #ecd98f; padding:9px 12px}
+  .btns button.hintbtn:active{transform:translateY(3px); box-shadow:0 1px 0 #ecd98f}
+  .btns button.hintbtn.on{background:#ffe7a0}
+  td.rowhead{cursor:pointer}
+  td.rowhead.hint{background:#fff3c4; box-shadow:inset 0 0 0 3px #e6b422}
+  .hintg{pointer-events:none}
   /* 「表」「図形」の 小さいタブ */
   .tnav{display:flex; gap:6px; margin-left:14px}
   .tnb{font-family:inherit; border:3px solid #fff; background:rgba(255,255,255,.18); color:#fff;
@@ -4491,6 +4516,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
 <footer>
   <div class="msg" id="msg">あてはまる ますを タップして ○を つけよう。</div>
   <div class="btns">
+    <button class="hintbtn" id="btnHyoHint">&#128161; ヒント</button>
     <button id="btnReset">はじめから</button>
     <button id="btnCheck">こたえあわせ</button>
   </div>
@@ -4507,6 +4533,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
   <footer>
     <div class="msg" id="zmsg"></div>
     <div class="btns">
+      <button class="hintbtn" id="btnZHint">&#128161; ヒント</button>
       <button id="btnZNext">次の もんだい</button>
       <button id="btnZCheck">決定</button>
     </div>
@@ -4562,6 +4589,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
     const diag=ln(p[0],p[2])+ln(p[1],p[3]);
     return '<svg viewBox="0 0 60 46" xmlns="http://www.w3.org/2000/svg">'
       +'<g fill="#fff" stroke="#1f2430" stroke-width="2.4" stroke-linejoin="round">'+poly+'</g>'
+      +'<g class="hintg"></g>'
       +'<g class="diag" fill="none" stroke="#2f7dd1" stroke-width="2.4" stroke-linecap="round">'+diag+'</g>'
       +'</svg>';
   }
@@ -4672,12 +4700,94 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
     else{ say('あかい ますが まちがい だよ。なおして もう一回！（正解 '+ok+'こ／'+TOTAL+'こ）','bad'); }
   });
 
+  // ══ 💡 ヒント（v90）══════════════════════════════════════
+  // 「💡 ヒント」を おすたびに 1行目→2行目→…→5行目→けす。左の 特ちょうを タップしても その行へ。
+  // 見出しの 5つの 形に、その行の しるしを 出す（同じ色＝平行／同じ長さ、□＝直角／垂直）。
+  // ★ 表の 台形は 左右の 辺・対角線が たまたま 同じ 長さに かいて あるので、
+  //   図から 計算せず、四角形の 決まりを RULE に 書いて おく（表の 答え ans と 同じ 中身）。
+  //   辺の 番号 … PTS の 順に 0＝p0-p1 1＝p1-p2 2＝p2-p3 3＝p3-p0（むかい合う 辺は 0と2、1と3）
+  const HRED='#e23c3c', HBLUE='#2f7dd1', HGRAY='#9aa3a0';
+  const HINT_ROWS=[
+    {key:'par',   cap:'💡 同じ 色の 辺どうしが 平行'},
+    {key:'side',  cap:'💡 同じ 色の 辺は 同じ 長さ'},
+    {key:'right', cap:'💡 赤い 直角の しるしが ある 角は 直角'},
+    {key:'dlen',  cap:'💡 同じ 色の 対角線は 同じ 長さ'},
+    {key:'dperp', cap:'💡 赤い 直角の しるしが あれば 垂直'}
+  ];
+  // par … 平行な 組（0＝辺0と2、1＝辺1と3）／side … 辺の 色（0＝なし 1＝赤 2＝青）
+  const RULE={
+    trap:{par:[0],   side:[0,0,0,0], right:false, dEq:false, dPerp:false},
+    para:{par:[0,1], side:[1,2,1,2], right:false, dEq:false, dPerp:false},
+    rhom:{par:[0,1], side:[1,1,1,1], right:false, dEq:false, dPerp:true },
+    rect:{par:[0,1], side:[1,2,1,2], right:true,  dEq:true,  dPerp:false},
+    squ :{par:[0,1], side:[1,1,1,1], right:true,  dEq:true,  dPerp:true }
+  };
+  const hF=v=>Math.round(v*10)/10;
+  function hseg(a,b,c,w){ return '<line x1="'+hF(a[0])+'" y1="'+hF(a[1])+'" x2="'+hF(b[0])+'" y2="'+hF(b[1])+
+    '" stroke="'+c+'" stroke-width="'+w+'" stroke-linecap="round"/>'; }
+  function hu(a,b){ const x=b[0]-a[0], y=b[1]-a[1], d=Math.hypot(x,y)||1; return [x/d, y/d]; }
+  function hRight(O,u,w,r,c){
+    const a=[O[0]+r*u[0],O[1]+r*u[1]], b=[O[0]+r*w[0],O[1]+r*w[1]], m=[O[0]+r*(u[0]+w[0]),O[1]+r*(u[1]+w[1])];
+    return '<path d="M'+hF(a[0])+','+hF(a[1])+' L'+hF(m[0])+','+hF(m[1])+' L'+hF(b[0])+','+hF(b[1])+
+      '" fill="none" stroke="'+c+'" stroke-width="2.2" stroke-linejoin="round"/>';
+  }
+  function hArc(p,k,c){
+    const v=p[k], u=hu(v,p[(k+3)%4]), w=hu(v,p[(k+1)%4]), r=5.5;
+    const a=[v[0]+r*u[0],v[1]+r*u[1]], b=[v[0]+r*w[0],v[1]+r*w[1]];
+    const cr=u[0]*w[1]-u[1]*w[0];
+    return '<path d="M'+hF(a[0])+','+hF(a[1])+' A'+r+','+r+' 0 0,'+(cr>0?1:0)+' '+hF(b[0])+','+hF(b[1])+
+      '" fill="none" stroke="'+c+'" stroke-width="1.7" stroke-linecap="round"/>';
+  }
+  function hCross(p){                       // 対角線の 交わる 点
+    const a=p[0], r=[p[2][0]-a[0],p[2][1]-a[1]], q=p[1], t=[p[3][0]-q[0],p[3][1]-q[1]];
+    const den=r[0]*t[1]-r[1]*t[0]; if(Math.abs(den)<1e-6) return null;
+    const k=((q[0]-a[0])*t[1]-(q[1]-a[1])*t[0])/den;
+    return [a[0]+r[0]*k, a[1]+r[1]*k];
+  }
+  function hintSVG(k,key){
+    const p=PTS[k], R=RULE[k], E=i=>[p[i],p[(i+1)%4]];
+    let g='';
+    if(key==='par'){
+      R.par.forEach(j=>{ const c=j===0?HRED:HBLUE; g+=hseg(...E(j),c,3.8)+hseg(...E(j+2),c,3.8); });
+    }else if(key==='side'){
+      R.side.forEach((s,i)=>{ if(s) g+=hseg(...E(i), s===1?HRED:HBLUE, 3.8); });
+    }else if(key==='right'){
+      [0,1,2,3].forEach(i=>{ g+= R.right ? hRight(p[i],hu(p[i],p[(i+3)%4]),hu(p[i],p[(i+1)%4]),6,HRED) : hArc(p,i,HGRAY); });
+    }else if(key==='dlen'){
+      g+=hseg(p[0],p[2],HRED,2.6)+hseg(p[1],p[3], R.dEq?HRED:HBLUE, 2.6);
+    }else if(key==='dperp'){
+      g+=hseg(p[0],p[2],HBLUE,2.4)+hseg(p[1],p[3],HBLUE,2.4);
+      const O=hCross(p);
+      if(R.dPerp && O) g+=hRight(O,hu(O,p[0]),hu(O,p[1]),5.5,HRED);
+    }
+    return g;
+  }
+  let hintRow=-1;
+  const hintBtn=document.getElementById('btnHyoHint');
+  const HEADS=[...document.querySelectorAll('thead th.head')];
+  const ROWHEADS=[...document.querySelectorAll('td.rowhead')];
+  const DEF_MSG='あてはまる ますを タップして ○を つけよう。';
+  function showHint(r){
+    const wasCap = hintRow>=0 && msg.textContent===HINT_ROWS[hintRow].cap;
+    hintRow=r;
+    HEADS.forEach((th,c)=>{ const g=th.querySelector('.hintg'); if(g) g.innerHTML = r<0 ? '' : hintSVG(cols[c].shape, HINT_ROWS[r].key); });
+    ROWHEADS.forEach((td,i)=>td.classList.toggle('hint', i===r));
+    hintBtn.classList.toggle('on', r>=0);
+    hintBtn.innerHTML = r<0 ? '&#128161; ヒント' : (r<HINT_ROWS.length-1 ? '&#128161; つぎの ヒント' : '&#128161; ヒントを けす');
+    if(r>=0) say(HINT_ROWS[r].cap);
+    else if(wasCap) say(DEF_MSG);
+  }
+  hintBtn.addEventListener('click',()=>{ showHint(hintRow+1<HINT_ROWS.length ? hintRow+1 : -1); });
+  ROWHEADS.forEach((td,i)=>td.addEventListener('click',()=>{ showHint(i===hintRow ? -1 : i); }));
+  window.hyoHint=showHint;   // テスト用
+
   // ── はじめから ──
   document.getElementById('btnReset').addEventListener('click',()=>{
     document.querySelectorAll('td.cell').forEach(td=>td.classList.remove('on','ok','ng','need'));
     if(hanaTimer){ clearTimeout(hanaTimer); hanaTimer=null; }
     hana.classList.remove('show','fade');
     say('あてはまる ますを タップして ○を つけよう。');
+    showHint(-1);
   });
 
   // ══════════════════ 「図形」ページ ══════════════════
@@ -4779,12 +4889,56 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
       return '<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">'+g+'</svg>';
     }
 
+    // ── 💡 ヒント（v90）… 6つ 全部の 形に しるしを 出す（同じ色＝同じ 長さ・平行・同じ 大きさ）──
+    //   こたえあわせの あとの 赤い しるし（zsvg）と ちがい、あてはまらない 形にも かく。
+    //   色が そろわない・□が ない 形が「あてはまらない」と 図で わかる。
+    const GRAY='#9aa3a0';
+    const ZCAP={
+      par:'💡 同じ 色の 辺どうしが 平行', oppside:'💡 同じ 色の 辺は 同じ 長さ',
+      angle:'💡 同じ 色の 角は 同じ 大きさ（灰色は ちがう 大きさ）', side4:'💡 同じ 色の 辺は 同じ 長さ',
+      right4:'💡 赤い 直角の しるしが ある 角は 直角（灰色は 直角ではない）', diag:'💡 同じ 色の 対角線は 同じ 長さ',
+      diagperp:'💡 赤い 直角の しるしが あれば 垂直'
+    };
+    const nearL=(a,b)=>Math.abs(a-b)/Math.max(a,b)<0.03;
+    function zhint(sh, hl){
+      const p=sh.p, P=sh.P, E=k=>[p[k%4],p[(k+1)%4]];
+      let g='<polygon points="'+p.map(a=>a.join(',')).join(' ')+
+        '" fill="#d8e9f6" stroke="#1f2430" stroke-width="3" stroke-linejoin="round"/>';
+      if(hl==='par'){
+        P.parPairs.forEach((k,i)=>{ const c=i===0?RED:BLUE; g+=seg(...E(k),c)+seg(...E(k+2),c); });
+      }else if(hl==='oppside'){
+        [0,1].forEach(k=>{ if(nearL(P.L[k],P.L[k+2])){ const c=k===0?RED:BLUE; g+=seg(...E(k),c)+seg(...E(k+2),c); } });
+      }else if(hl==='side4'){
+        const col=[null,null,null,null], CL=[RED,BLUE]; let n=0;
+        for(let i=0;i<4;i++){
+          if(col[i]) continue;
+          const same=[i]; for(let j=i+1;j<4;j++) if(!col[j] && nearL(P.L[i],P.L[j])) same.push(j);
+          if(same.length>1 && n<CL.length){ same.forEach(j=>{ col[j]=CL[n]; }); n++; }
+        }
+        col.forEach((c,i)=>{ if(c) g+=seg(...E(i),c); });
+      }else if(hl==='angle'){
+        [0,1].forEach(k=>{ const c=Math.abs(P.A[k]-P.A[k+2])<1 ? (k===0?RED:BLUE) : GRAY;
+          g+=arcAt(p,k,c)+arcAt(p,k+2,c); });
+      }else if(hl==='right4'){
+        [0,1,2,3].forEach(k=>{ g+= Math.abs(P.A[k]-90)<1 ? rightAt(p,k,RED) : arcAt(p,k,GRAY); });
+      }else if(hl==='diag'){
+        g+=seg(p[0],p[2],RED,4)+seg(p[1],p[3], P.diagEq?RED:BLUE, 4);
+      }else if(hl==='diagperp'){
+        g+=seg(p[0],p[2],BLUE,4)+seg(p[1],p[3],BLUE,4);
+        if(P.diagPerp) g+=crossAt(p,RED);
+      }
+      return '<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">'+g+'</svg>';
+    }
+
     // ── 画面 ──
     const grid=document.getElementById('zgrid'), zqEl=document.getElementById('zq');
     const zmsgEl=document.getElementById('zmsg'), hanaZ=document.getElementById('hanaZ');
     hanaZ.src=HANA_B64;
     const HINT='あてはまる 形を タップ しよう。（いくつ えらんでも いいよ）';
     let cur=null, sel=[], done=false, order=[], oi=99, cards=[], hz=null;
+    let zh=false;   // 💡 ヒントを 出して いるか（v90）
+    const zHintBtn=document.getElementById('btnZHint');
+    const zIdle=()=> zh ? ZCAP[cur.hl] : HINT;
 
     function zsay(t,k){ zmsgEl.textContent=t; zmsgEl.className='msg'+(k?(' '+k):''); }
     // はなまるを 2秒 出す → すっと 消す → 次の もんだいへ（辺と角タブと 同じ ながれ）
@@ -4808,11 +4962,11 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
       cards=ZP.map((sh,i)=>{
         const c=document.createElement('div');
         c.className='zcard';
-        c.innerHTML='<div class="zsv">'+zsvg(sh, (done && cur.f(sh.P)) ? cur.hl : null)+
+        c.innerHTML='<div class="zsv">'+((zh && !done) ? zhint(sh, cur.hl) : zsvg(sh, (done && cur.f(sh.P)) ? cur.hl : null))+
           '</div><div class="nm">'+sh.n+'</div><span class="mk"></span>';
         c.addEventListener('click',()=>{
           if(done) return;
-          sel[i]=!sel[i]; marks(); zsay(HINT);
+          sel[i]=!sel[i]; marks(); zsay(zIdle());
         });
         grid.appendChild(c);
         return c;
@@ -4829,6 +4983,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
       }
       cur=ZQ[order[oi++]];
       sel=ZP.map(()=>false); done=false;
+      zh=false; zHintBtn.classList.remove('on');
       zqEl.innerHTML='次の 中から、あてはまる ものを <b>ぜんぶ</b> えらんで「決定」を おしましょう。　<span class="qq">'+cur.t+'</span>';
       if(hz){ clearTimeout(hz); hz=null; }
       hanaZ.classList.remove('show','fade');
@@ -4857,6 +5012,11 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
     }
     document.getElementById('btnZCheck').addEventListener('click', check);
     document.getElementById('btnZNext').addEventListener('click', newQ);
+    zHintBtn.addEventListener('click',()=>{
+      if(done) return;
+      zh=!zh; zHintBtn.classList.toggle('on', zh);
+      render(); zsay(zIdle());
+    });
     newQ();
     window.zNewQ=newQ;   // テスト用
     window.zData=()=>({ZP:ZP, ZQ:ZQ, cur:cur, cards:cards, sel:sel, done:done});
@@ -6539,6 +6699,8 @@ window.TestRun = (function(){
         d.addEventListener('click', e => {
           const th = e.target.closest('thead th.head');
           if(th && !th.classList.contains('dshow')) api.hint('hyo');
+          /* v90：「💡 ヒント」・左の 特ちょうの タップも ヒント */
+          if(e.target.closest('#btnHyoHint, td.rowhead')) api.hint('hyo');
         }, true);
       },
       open(w,d){
@@ -6553,6 +6715,8 @@ window.TestRun = (function(){
         watchShow(w, d.getElementById('hanaZ'), () => api.onDone('zukei'));
         /* 「まだ ひとつも えらんで いない」は まちがいに 数えない */
         watchBad (w, d.getElementById('zmsg'), t => t.indexOf('まだ ひとつも') < 0, () => api.miss('zukei'));
+        /* v90：「💡 ヒント」 */
+        d.addEventListener('click', e => { if(e.target.closest('#btnZHint')) api.hint('zukei'); }, true);
       },
       open(w){ w.showPane('zu'); w.zNewQ(); },
       save:tokuchoSave, restore:tokuchoRestore,
