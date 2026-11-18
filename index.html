@@ -24,7 +24,7 @@
  <button class="tab" data-f="fHenKaku">辺と角</button>
  <button class="tab" data-f="fTokucho">四角形の特ちょう</button>
  <button class="tab" data-f="fRenshu">練習問題</button>
- <span class="ver">v91</span>
+ <span class="ver">v92</span>
 </div>
 <div class="frames">
  <iframe id="fSagasu" class="show" title="平行・垂直な直線をさがす"></iframe>
@@ -4076,7 +4076,25 @@ function drawGiven(){
   const a0=angOf(R), del=shortDelta(a0,angOf(U));
   el(g,'path',{d:arcPath(c,30,a0,a0+del),fill:'none',stroke:'var(--red)','stroke-width':3});
   const lp=polar(c,54,a0+del/2);
-  el(g,'text',{x:lp.x,y:lp.y+10,'font-size':28,'font-weight':800,fill:'var(--red)','text-anchor':'middle'},`${baseAng}°`);
+  const tx=el(g,'text',{x:lp.x,y:lp.y+10,'font-size':28,'font-weight':800,fill:'var(--red)','text-anchor':'middle'},`${baseAng}°`);
+  /* ★v92：数字が 角の しるし（弧）や 線に 近くて 見にくかったので、
+     文字の 四角が 弧から 10、2本の 線から 8 以上 はなれる ところまで 外へ ずらす */
+  let hw=30; const hh=11;   // hh：数字の 高さの 半分くらい
+  try{ const bb=tx.getBBox(); if(bb.width>0) hw=bb.width/2; }catch(e){}
+  const mid=a0+del/2, ux=Math.cos(mid*RAD), uy=Math.sin(mid*RAD);
+  const rays=[a0,a0+del].map(a=>({x:Math.cos(a*RAD), y:Math.sin(a*RAD)}));
+  const cr=(d,v)=>d.x*v.y-d.y*v.x;
+  const side=rays.map(d=>Math.sign(cr(d,{x:ux,y:uy})));
+  let r=54;
+  for(; r<160; r+=2){
+    const qx=ux*r, qy=uy*r;
+    const cs=[[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]].map(([dx,dy])=>({x:qx+dx,y:qy+dy}));
+    const okArc = cs.every(p=>Math.hypot(p.x,p.y)>=40);
+    const okLine= cs.every(p=>rays.every((d,i)=>cr(d,p)*side[i]>=8));
+    if(okArc && okLine) break;
+  }
+  const np=polar(c,r,mid);
+  tx.setAttribute('x',np.x); tx.setAttribute('y',np.y+10);   // 数字の まん中を np に
 }
 function drawMarks(){
   const g=$('marks'); clr(g); drawGiven();
@@ -4130,9 +4148,19 @@ function press(x){
   typed+=x; showTyped();
   if(typed.length===need) answer(parseInt(typed,10));
 }
+/* ★v92：日本語入力（全角）が オンでも 数字に する（全角の ０〜９、IME中の Process も 数字キーの 場所で 読む） */
+function keyDigit(e){
+  const k=e.key||'';
+  if(k.length===1 && k>='0' && k<='9') return k;
+  if(k.length===1 && k>='０' && k<='９') return String.fromCharCode(k.charCodeAt(0)-0xFEE0);
+  const m=/^(?:Digit|Numpad)([0-9])$/.exec(e.code||'');
+  if(m && (k==='Process' || k==='Unidentified' || e.keyCode===229)) return m[1];
+  return null;
+}
 document.addEventListener('keydown', e=>{
   if(e.ctrlKey||e.metaKey||e.altKey) return;
-  if(e.key>='0' && e.key<='9'){ press(e.key); e.preventDefault(); }
+  const dg=keyDigit(e);   // ★v92
+  if(dg!==null){ press(dg); e.preventDefault(); }
   else if(e.key==='Backspace'){ press('del'); e.preventDefault(); }
 });
 function say(msg){ $('stepText').innerHTML='<span>'+msg+'</span>'; }   // 1つの かたまりに して 1行に
@@ -6543,6 +6571,23 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
   tabs.forEach(function(t){ t.addEventListener('click', function(){
     show(t.dataset.g==='sakuzu' ? sakuzuCur : t.dataset.f);
   }); });
+  /* ★v92：「角度」タブを 開いた ままでも（上の タブを おした あとなど）、
+     パソコンの 数字キー／BackSpace を 角度の ページへ とどける（全角・日本語入力中の 数字も） */
+  document.addEventListener('keydown', function(e){
+    if(e.ctrlKey||e.metaKey||e.altKey) return;
+    var k=e.key||'', key=null, m;
+    if(k.length===1 && k>='0' && k<='9') key=k;
+    else if(k.length===1 && k>='０' && k<='９') key=String.fromCharCode(k.charCodeAt(0)-0xFEE0);   // 全角
+    else if((m=/^(?:Digit|Numpad)([0-9])$/.exec(e.code||'')) && (k==='Process' || k==='Unidentified' || e.keyCode===229)) key=m[1];   // 日本語入力中
+    else if(k==='Backspace') key='Backspace';
+    if(key===null) return;
+    var t=e.target; if(t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable)) return;
+    var f=document.getElementById('fKakudo');
+    if(!f || !f.classList.contains('show')) return;
+    var d=f.contentDocument; if(!d) return;
+    d.dispatchEvent(new KeyboardEvent('keydown', {key:key, bubbles:true, cancelable:true}));
+    e.preventDefault();
+  });
   // 「作図」の 中の 小さいタブ（各ページの header）から とどく メッセージ
   window.addEventListener('message', function(ev){
     var d=ev.data; if(!d || d.type!=='sub') return;
