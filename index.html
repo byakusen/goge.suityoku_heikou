@@ -26,8 +26,8 @@
  <button class="tab" data-f="fHenKaku">辺と角</button>
  <button class="tab" data-f="fTokucho">四角形の特ちょう</button>
  <button class="tab" data-f="fRenshu">練習問題</button>
- <button class="tab zukan" data-f="fZukei">図形のとくちょう</button>
- <span class="ver">v112</span>
+ <button class="tab zukan" data-f="fZukei">図形の特ちょう</button>
+ <span class="ver">v123</span>
 </div>
 <div class="frames">
  <iframe id="fSagasu" class="show" title="平行・垂直な直線をさがす"></iframe>
@@ -37,6 +37,7 @@
  <iframe id="fPg" title="平行四辺形のかき方"></iframe>
 <iframe id="fPgHelp" title="平行四辺形のお助け"></iframe>
 <iframe id="fPgMore" title="平行四辺形さらに"></iframe>
+<iframe id="fDaikei" title="台形のかき方"></iframe>
 <iframe id="fHishi" title="ひし形のかき方"></iframe>
 <iframe id="fHenKaku" title="辺と角"></iframe>
 <iframe id="fTokucho" title="四角形の特ちょう"></iframe>
@@ -812,6 +813,7 @@ newFigure();
     <button class="snb on">垂直</button>
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fHei'},'*')">平行</button>
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fPg'},'*')">平行四辺形</button>
+    <button class="snb" onclick="parent.postMessage({type:'sub',id:'fDaikei'},'*')">台形</button>
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fHishi'},'*')">ひし形</button>
     <button class="snb help" onclick="parent.postMessage({type:'sub',id:'fPgHelp'},'*')">平行四辺形のお助け</button>
     <button class="snb more" onclick="parent.postMessage({type:'sub',id:'fPgMore'},'*')">平行四辺形さらに</button>
@@ -1325,6 +1327,7 @@ setMode('demo');
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fSui'},'*')">垂直</button>
     <button class="snb on">平行</button>
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fPg'},'*')">平行四辺形</button>
+    <button class="snb" onclick="parent.postMessage({type:'sub',id:'fDaikei'},'*')">台形</button>
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fHishi'},'*')">ひし形</button>
     <button class="snb help" onclick="parent.postMessage({type:'sub',id:'fPgHelp'},'*')">平行四辺形のお助け</button>
     <button class="snb more" onclick="parent.postMessage({type:'sub',id:'fPgMore'},'*')">平行四辺形さらに</button>
@@ -1814,6 +1817,7 @@ setMode('demo');
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fSui'},'*')">垂直</button>
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fHei'},'*')">平行</button>
     <button class="snb on">平行四辺形</button>
+    <button class="snb" onclick="parent.postMessage({type:'sub',id:'fDaikei'},'*')">台形</button>
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fHishi'},'*')">ひし形</button>
     <button class="snb help" onclick="parent.postMessage({type:'sub',id:'fPgHelp'},'*')">平行四辺形のお助け</button>
     <button class="snb more" onclick="parent.postMessage({type:'sub',id:'fPgMore'},'*')">平行四辺形さらに</button>
@@ -1991,17 +1995,21 @@ const CMAX=480/RCM;              // コンパスが 開く 上限＝5.6cm（MAXC
 const CMIN=0.5;                  // コンパスが 閉じきった とき＝0.23cm。それより 大きければ よい
 const RULER_MAX=6;               // 定規の めもりの 上限＝6cm
 const FIG_H_MIN=130;             // これより ひらたいと 平行四辺形に 見えない
+const FIG_H_MAX=340;             // ★v118 縦長の 高さの 上限（横長の いちばん 高い 形＝335 と 同じくらい。コンパスが 上に はみ出しすぎない）
 const SHAPES=(function(){
   const out=[];
-  for(const ang of [50,60,70,80]) for(const bc of [3,4,5,6]) for(const ab of [2,3,4]){
+  for(const ang of [50,60,70,80]) for(const bc of [2,3,4,5,6]) for(const ab of [2,3,4]){
     const w=bc*RCM+ab*RCM*Math.cos(ang*RAD), h=ab*RCM*Math.sin(ang*RAD);
-    if(bc<=ab) continue;                        // へんBCを 長い ほうに
+    const tall=(ab>bc);                         // ★v118 縦長（へんABの ほうが 長い）
+    if(bc===ab) continue;                       // ひし形に なるので のぞく
+    if(tall && h<=w) continue;                  // ★v118 縦長は 見た目も たてに 長い ものだけ
+    if(tall && h>FIG_H_MAX) continue;           // ★v118 高すぎると コンパスが 画面の 上に 出る
     if(w>FIG_R-FIG_L-10) continue;              // 見本の枠に ぶつからずに 収まるか
     if(h<FIG_H_MIN) continue;                   // ひらたすぎないか
     if(bc>CMAX || ab>CMAX) continue;            // コンパスが そこまで 開くか
     if(bc<CMIN || ab<CMIN) continue;            // コンパスが そこまで 閉じるか
     if(bc>RULER_MAX || ab>RULER_MAX) continue;  // 定規の めもりに あるか
-    out.push({ang,bc,ab,w,h});
+    out.push({ang,bc,ab,w,h,tall});
   }
   return out;
 })();
@@ -2157,10 +2165,22 @@ function buildVtx(){
 /* 平行線（十分長く）の端点 */
 function parLine_A(){ // 点Aを通りBCに平行（BCは水平）
   const d=dir(0); const ext=170;
-  return [{x:V.A.x-40, y:V.A.y}, {x:V.D.x+ext, y:V.D.y}]; }
+  return trimFirstStroke(V.B,V.C,V.A,[{x:V.A.x-40, y:V.A.y}, {x:V.D.x+ext, y:V.D.y}]); }   // ★v119
 function parLine_C(){ // 点CをABに平行
   const u=[Math.cos(-ANG*RAD),Math.sin(-ANG*RAD)];   // AB方向（B→A）
-  return [{x:V.C.x-u[0]*30, y:V.C.y-u[1]*30}, {x:V.D.x+u[0]*150, y:V.D.y+u[1]*150}]; }
+  return trimFirstStroke(V.B,V.A,V.C,[{x:V.C.x-u[0]*30, y:V.C.y-u[1]*30}, {x:V.D.x+u[0]*150, y:V.D.y+u[1]*150}]); }   // ★v119
+/* ★v119：三角じょうぎで 1回 ひいただけで 点Dを PAST_D 以上 こえて いれば、線は そこで おわり
+   （三角じょうぎを ずらして のばさない）。こえて いなければ 今までどおりの 長さ。
+   drawAlongRuler と 同じ 計算（frameMatrix・pgEdgeLen）で、1回めに とどく ところを 出す。 */
+const PAST_D=40;                 // 点Dより これだけ（約0.5cm）先まで あれば よい
+function trimFirstStroke(refP1,refP2,T,pts){
+  const fm=frameMatrix(refP1,refP2,T,ROFF);
+  const lxOf=p=>(p.x-fm.R0.x)*fm.ux+(p.y-fm.R0.y)*fm.uy;
+  const lx0=lxOf(pts[0]), lx1=lxOf(pts[1]), reach=pgEdgeLen();
+  if(reach>=lx1 || lxOf(V.D)+PAST_D>reach) return pts;
+  const t=(reach-lx0)/(lx1-lx0);
+  return [pts[0], {x:pts[0].x+(pts[1].x-pts[0].x)*t, y:pts[0].y+(pts[1].y-pts[0].y)*t}];
+}
 
 /* ============ 手本の状態 ============ */
 let method='junbi';    // 'junbi' | 'compass' | 'ruler' | 'heikou'
@@ -2257,7 +2277,7 @@ function buildRefFig(){
   const BOX={x:596,y:40,w:266,h:192};                 // 枠（SVGの rect と 同じ）
   const AREA={w:170, h:96};                           // 図に つかう ところ（まわりは ラベル用）
   const sc=Math.min(AREA.w/(BCL+ABL*Math.cos(ANG*RAD)), AREA.h/(ABL*Math.sin(ANG*RAD)));
-  const P=k=>({x:BOX.x+BOX.w/2 + (V[k].x-Gc.x)*sc, y:BOX.y+BOX.h/2+22 + (V[k].y-Gc.y)*sc});
+  const P=k=>({x:BOX.x+BOX.w/2+8 + (V[k].x-Gc.x)*sc, y:BOX.y+BOX.h/2+22 + (V[k].y-Gc.y)*sc});   // ★v123 字を 大きく した ので 図を 右へ 8（左の へんABの 字が 枠に かからない ように）
   const A=P('A'), B=P('B'), C=P('C'), D=P('D');
   add('polygon',{points:`${A.x},${A.y} ${D.x},${D.y} ${C.x},${C.y} ${B.x},${B.y}`,
     fill:'none', stroke:'var(--line)', 'stroke-width':2.5, 'stroke-linejoin':'round'});
@@ -2268,14 +2288,14 @@ function buildRefFig(){
   const dim=(p,t,dx,dy,fs)=>add('text',{x:p.x+dx, y:p.y+dy, 'font-size':fs||15, fill:'#444',
     'text-anchor':'middle'}, t);
   const ab=awaySide(V.B,V.A);
-  dim({x:(A.x+B.x)/2, y:(A.y+B.y)/2}, cmTxt(AB_CM), ab.pr.x*26-4, ab.pr.y*26+5);   // へんAB
-  dim({x:(B.x+C.x)/2, y:(B.y+C.y)/2}, cmTxt(BC_CM), 0, 21);                        // へんBC
+  dim({x:(A.x+B.x)/2, y:(A.y+B.y)/2}, cmTxt(AB_CM), ab.pr.x*31-5, ab.pr.y*31+6, 19);   // へんAB　★v123 15→19
+  dim({x:(B.x+C.x)/2, y:(B.y+C.y)/2}, cmTxt(BC_CM), 0, 25, 19);                        // へんBC　★v123 15→19
   /* ★v46：見本にも 角度の しるし（弧）を つける。本体と 同じ 見た目・同じ 向き。 */
   add('path',{d:arcPath(B, REF_MARK_R, 0, -ANG), fill:'none', stroke:'var(--red)', 'stroke-width':2});
   /* ★v45：角Bは 12px→15px（cmの ラベルと 同じ 大きさ）。見えにくく、辺に かぶって いたため。
      大きくすると よけい かぶるので、位置は 辺と 弧から はなれる ところを 計算で 出す。 */
-  const q=angLabelAt(B, ANG, 15, REF_MARK_R+6, 6, REF_MARK_R+5);
-  dim(q, degTxt(ANG), 0, 0, 15);                                                   // 角B
+  const q=angLabelAt(B, ANG, 19, REF_MARK_R+6, 6, REF_MARK_R+5);   // ★v123 15→19
+  dim(q, degTxt(ANG), 0, 0, 19);                                                   // 角B　★v123 15→19
 }
 
 function render(n){   // アニメなしで状態nを表示
@@ -2299,6 +2319,7 @@ function render(n){   // アニメなしで状態nを表示
   arcA.setAttribute('d', (comp && n>=1)? arcPath(V.A,BCL,angAD-SPAN,angAD+SPAN) : '');
   arcC.setAttribute('d', (comp && n>=2)? arcPath(V.C,ABL,angCD-SPAN,angCD+SPAN) : '');
   // 三角じょうぎの平行線（平行モードは 点Aの1本だけ）
+  { const pa=parLine_A(), pc=parLine_C(); setLine(parA,pa[0],pa[1]); setLine(parC,pc[0],pc[1]); }   // ★v119 長さを その時の 三角じょうぎに あわせる
   show(parA, (rul||par) && n>=1); if((rul||par)&&n>=1){parA.style.strokeDasharray='';}
   show(parC, rul && n>=2); if(rul&&n>=2){parC.style.strokeDasharray='';}
   showEl('dimAD', par && n>=2);   // 平行モードの「4cm」（へんAD）
@@ -2457,8 +2478,8 @@ async function goNext(auto){
         await animate(0,1,750,()=>{},easeOut); showEl('dim3',true); vtxOn('A',true);
         await animate(0,1,400,()=>{},ease); await fadeHide(dojo,300); }   // 線は切らず、3cmに点Aをつけるだけ
   } else if(method==='compass'){
-    if(n===1) await measureMoveDraw(V.A,BCL,angAD,arcA,'4cm');
-    else if(n===2) await measureMoveDraw(V.C,ABL,angCD,arcC,'3cm');
+    if(n===1) await measureMoveDraw(V.A,BCL,angAD,arcA,cmTxt(BC_CM));   // ★v120 「4cm」の ままだった
+    else if(n===2) await measureMoveDraw(V.C,ABL,angCD,arcC,cmTxt(AB_CM));   // ★v120 「3cm」の ままだった
     else if(n===3){ revealD(); await drawSideWithRuler(sideAD,V.A,V.D,950); }
     else if(n===4){ await drawSideWithRuler(sideCD,V.C,V.D,950); }
   } else if(method==='ruler'){
@@ -2517,7 +2538,9 @@ function setMethod(m){
    いまと ちがう 形に なるまで ひきなおす（おしたのに 変わらないと 子どもが とまどうため）。 */
 function newShape(){
   let s, guard=0;
-  do{ s=SHAPES[Math.floor(Math.random()*SHAPES.length)]; }
+  const wantTall=(Math.random()<0.5);                          // ★v118 横長と 縦長を 半分ずつ（縦長は 4通りしか ないので、先に どちらに するか きめる）
+  const pool=SHAPES.filter(x=>x.tall===wantTall);
+  do{ s=pool[Math.floor(Math.random()*pool.length)]; }
   while(++guard<40 && s.ang===ANG && s.bc===BC_CM && s.ab===AB_CM);
   setShape(s); baseSetup(); setMethod(method);   // setMethod が demo に もどして 引きなおす
 }
@@ -3002,6 +3025,7 @@ setMethod('junbi');
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fSui'},'*')">垂直</button>
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fHei'},'*')">平行</button>
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fPg'},'*')">平行四辺形</button>
+    <button class="snb" onclick="parent.postMessage({type:'sub',id:'fDaikei'},'*')">台形</button>
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fHishi'},'*')">ひし形</button>
     <button class="snb help on">平行四辺形のお助け</button>
     <button class="snb more" onclick="parent.postMessage({type:'sub',id:'fPgMore'},'*')">平行四辺形さらに</button>
@@ -3502,6 +3526,7 @@ drawFig(); buildR1(); buildR2(); makeViews(); setView('V',false); intro();
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fSui'},'*')">垂直</button>
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fHei'},'*')">平行</button>
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fPg'},'*')">平行四辺形</button>
+    <button class="snb" onclick="parent.postMessage({type:'sub',id:'fDaikei'},'*')">台形</button>
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fHishi'},'*')">ひし形</button>
     <button class="snb help" onclick="parent.postMessage({type:'sub',id:'fPgHelp'},'*')">平行四辺形のお助け</button>
     <button class="snb more on">平行四辺形さらに</button>
@@ -3921,6 +3946,291 @@ buildNote(); makeView(); intro();
 <\/script>
 </script>
 
+<script type="text/html" id="srcDaikei">
+<!--
+  台形のかき方（小4 算数）／ v1（アプリ v113 で 新設）
+  ■ 考えかた
+   ・方眼の 線の 上を ドラッグして 2本の 線を ひく（はし は 方眼の 交わる 点に すいつく。よこ か たて に まっすぐ）。
+   ・2本 ひくと、線の はし どうしを 自動で つないで 四角形に する。
+     2本が 平行 … 台形（長さが 同じ なら 平行四辺形・長方形・正方形 と 伝える）
+     2本が 平行で ない … ふつうの 四角形（「台形に ならないね」）
+   ・同じ 線の 上／くっついた 線 は 2本めを かきなおし。
+   ・できた あとに また ドラッグすると、さいしょから かきなおし。
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>台形のかき方</title>
+<style>
+  :root{ --green:#4a9e5c; --green-d:#3b824a; --green-l:#eaf5ea; --green-ll:#f4faf3;
+    --paper:#ffffff; --line:#1f2430; --red:#e23c3c; --blue:#2f7dd1; --ink:#2b2b2b; --sub:#5b6b5e; --ok:#2b9b47; --org:#e8820e; }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{height:100vh; overflow:hidden; font-family:"Hiragino Maru Gothic ProN","Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",system-ui,sans-serif;
+    background:var(--green-ll); color:var(--ink); display:flex; flex-direction:column; -webkit-tap-highlight-color:transparent}
+  header{flex:0 0 auto; background:var(--green); color:#fff; padding:7px 14px; display:flex; align-items:center; gap:8px 14px; flex-wrap:wrap}
+  header h1{font-size:clamp(16px,4vw,23px); margin:0}
+  main{flex:1 1 auto; min-height:0; display:flex; align-items:center; justify-content:center; padding:6px 10px; position:relative}
+  .stage{width:100%; max-width:900px; height:100%; background:var(--paper); border:3px solid var(--green); border-radius:14px; overflow:hidden; display:flex}
+  svg{width:100%; height:100%; touch-action:none; cursor:crosshair}
+  footer{flex:0 0 auto; background:var(--green-l); border-top:3px solid var(--green); padding:9px 14px 11px}
+  .panel{max-width:900px; margin:0 auto}
+  .steprow{display:flex; align-items:center; gap:11px}
+  .stepno{flex:none; width:46px; height:46px; border-radius:50%; background:var(--green); color:#fff; font-size:22px; font-weight:800; display:flex; align-items:center; justify-content:center}
+  .steptext{flex:1 1 auto; font-size:clamp(15px,3.7vw,20px); font-weight:700; line-height:1.35; min-height:2.7em; display:grid; align-content:center}
+  .steptext.good{color:var(--ok)} .steptext.bad{color:var(--red)} .steptext.info{color:#b5640a}
+  button.act{flex:none; font-family:inherit; font-size:clamp(14px,3.6vw,18px); font-weight:800; padding:9px 15px; border-radius:12px; cursor:pointer;
+    background:#fff; color:var(--green-d); box-shadow:0 4px 0 #cfe3cf; border:2px solid var(--green)}
+  button.act:active{transform:translateY(3px); box-shadow:0 1px 0 #cfe3cf}
+  .fadein{animation:fi .45s ease}
+  @keyframes fi{from{opacity:0}to{opacity:1}}
+</style>
+
+<style>
+  /* 「作図」の 中の 小さいタブ（外側の 作図タブと そろえて 黄色） */
+  header h1{font-size:clamp(14px,3.2vw,19px)}
+  .subnav{display:flex; gap:6px; flex-wrap:wrap; margin-left:14px}
+  .snb{font-family:inherit; border:3px solid #ffd54a; background:rgba(255,213,74,.20); color:#fff6d0;
+    font-size:clamp(12px,3vw,15px); font-weight:800; padding:5px 12px; border-radius:999px; cursor:pointer; white-space:nowrap}
+  .snb.on{background:#ffd54a; color:#5a4300}
+  .snb.help{border-color:#ff9ec4; background:#d6467f; color:#fff}   /* ★v99 お助けは ピンク */
+  .snb.help.on{background:#ff9ec4; color:#6a1238}
+  .snb.more{border-color:#c4b2ff; background:#6a4fd1; color:#fff}   /* ★v100 さらには むらさき */
+  .snb.more.on{background:#c4b2ff; color:#2e1a73}
+</style>
+<header>
+  <h1>台形のかき方</h1>
+  <div class="subnav">
+    <button class="snb" onclick="parent.postMessage({type:'sub',id:'fSui'},'*')">垂直</button>
+    <button class="snb" onclick="parent.postMessage({type:'sub',id:'fHei'},'*')">平行</button>
+    <button class="snb" onclick="parent.postMessage({type:'sub',id:'fPg'},'*')">平行四辺形</button>
+    <button class="snb on">台形</button>
+    <button class="snb" onclick="parent.postMessage({type:'sub',id:'fHishi'},'*')">ひし形</button>
+    <button class="snb help" onclick="parent.postMessage({type:'sub',id:'fPgHelp'},'*')">平行四辺形のお助け</button>
+    <button class="snb more" onclick="parent.postMessage({type:'sub',id:'fPgMore'},'*')">平行四辺形さらに</button>
+  </div>
+</header>
+
+<main>
+  <div class="stage">
+    <svg id="board" viewBox="0 0 900 500" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+      <g id="grid"></g>
+      <polygon id="shape" points="" fill="none" stroke="none" stroke-linejoin="round"/>
+      <g id="links"></g>
+      <g id="lines"></g>
+      <line id="pre" x1="0" y1="0" x2="0" y2="0" stroke="var(--red)" stroke-width="5" stroke-linecap="round" visibility="hidden"/>
+      <circle id="preDot" r="7" fill="var(--red)" visibility="hidden"/>
+      <g id="marks"></g>
+      <text id="name" x="0" y="0" text-anchor="middle" dominant-baseline="middle" font-size="34" font-weight="800" fill="var(--ok)" opacity="0" pointer-events="none"></text>
+    </svg>
+  </div>
+</main>
+
+<footer>
+  <div class="panel">
+    <div class="steprow">
+      <div class="stepno" id="stepNo">1</div>
+      <div class="steptext" id="stepText"></div>
+      <button class="act" id="btnReset">↻ かきなおす</button>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  'use strict';
+  const NS='http://www.w3.org/2000/svg';
+  const $=id=>document.getElementById(id);
+  const G=40, OX=50, OY=30, NC=20, NR=11;          // 1ますの 大きさ・左上・ますの 数
+  const board=$('board'), lines=$('lines'), links=$('links'), marks=$('marks'), shape=$('shape'), pre=$('pre'), preDot=$('preDot'), nameT=$('name');
+  const P=(c,r)=>[OX+c*G, OY+r*G];
+  function mk(tag, at, parent){ const e=document.createElementNS(NS,tag); for(const k in at) e.setAttribute(k,at[k]); if(parent) parent.appendChild(e); return e; }
+
+  // 方眼
+  (function(){
+    const g=$('grid');
+    for(let c=0;c<=NC;c++){ const [x]=P(c,0); mk('line',{x1:x,y1:OY,x2:x,y2:OY+NR*G,stroke:(c%5===0?'#a9cfe6':'#d3e7f3'),'stroke-width':(c%5===0?1.8:1.1)},g); }
+    for(let r=0;r<=NR;r++){ const [,y]=P(0,r); mk('line',{x1:OX,y1:y,x2:OX+NC*G,y2:y,stroke:(r%5===0?'#a9cfe6':'#d3e7f3'),'stroke-width':(r%5===0?1.8:1.1)},g); }
+  })();
+
+  // 音（ピンポン／ブブー）
+  let ac=null;
+  function AC(){ try{ if(!ac){ const A=window.AudioContext||window.webkitAudioContext; if(A) ac=new A(); } if(ac && ac.state==='suspended') ac.resume(); }catch(e){} return ac; }
+  function tone(f,t,d,type,vol){ const a=AC(); if(!a) return; const o=a.createOscillator(), g=a.createGain(); o.type=type; o.frequency.value=f;
+    const s=a.currentTime+t; g.gain.setValueAtTime(0.0001,s); g.gain.exponentialRampToValueAtTime(vol,s+0.02); g.gain.exponentialRampToValueAtTime(0.0001,s+d);
+    o.connect(g); g.connect(a.destination); o.start(s); o.stop(s+d+0.05); }
+  function soundOK(){ try{ tone(880,0,0.45,'sine',0.3); tone(698.46,0.22,0.6,'sine',0.3); }catch(e){} }
+  function soundNG(){ try{ tone(150,0,0.28,'square',0.12); tone(150,0.33,0.4,'square',0.12); }catch(e){} }
+
+  // 文
+  function say(no, t, kind){ $('stepNo').textContent=no; const s=$('stepText'); s.textContent=t; s.className='steptext'+(kind?(' '+kind):''); s.classList.remove('fadein'); void s.offsetWidth; s.classList.add('fadein'); }
+
+  // じょうたい
+  let segs=[];          // [{a:[c,r], b:[c,r]}]（a が 左／上）
+  let drag=null;        // {a:[c,r], b:[c,r]}
+  let done=false;
+
+  function toGrid(ev){
+    const pt=board.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY;
+    const m=board.getScreenCTM(); if(!m) return null;
+    const q=pt.matrixTransform(m.inverse());
+    return [ Math.max(0,Math.min(NC,Math.round((q.x-OX)/G))), Math.max(0,Math.min(NR,Math.round((q.y-OY)/G))) ];
+  }
+  function straight(a, p){   // よこ か たて に まっすぐ
+    return (Math.abs(p[0]-a[0]) >= Math.abs(p[1]-a[1])) ? [p[0], a[1]] : [a[0], p[1]];
+  }
+  function norm(s){   // a を 左（たてなら 上）に
+    const a=s.a, b=s.b;
+    if(a[0]>b[0] || (a[0]===b[0] && a[1]>b[1])) return {a:b, b:a};
+    return {a:a, b:b};
+  }
+  const isH=s=>s.a[1]===s.b[1];
+
+  function drawSegs(){
+    lines.innerHTML='';
+    segs.forEach(s=>{
+      const [x1,y1]=P(s.a[0],s.a[1]), [x2,y2]=P(s.b[0],s.b[1]);
+      mk('line',{x1:x1,y1:y1,x2:x2,y2:y2,stroke:'var(--blue)','stroke-width':5,'stroke-linecap':'round'},lines);
+      mk('circle',{cx:x1,cy:y1,r:6,fill:'var(--blue)'},lines);
+      mk('circle',{cx:x2,cy:y2,r:6,fill:'var(--blue)'},lines);
+    });
+  }
+  function clearShape(){
+    links.innerHTML=''; marks.innerHTML='';
+    shape.setAttribute('points',''); shape.setAttribute('fill','none'); shape.setAttribute('stroke','none');
+    nameT.setAttribute('opacity','0'); nameT.style.transition='';
+  }
+  function resetAll(){
+    segs=[]; drag=null; done=false;
+    drawSegs(); clearShape();
+    pre.setAttribute('visibility','hidden'); preDot.setAttribute('visibility','hidden');
+    say(1,'方眼の 線の 上を ドラッグして、1本めの 線を ひこう。');
+  }
+
+  // ── ドラッグ ──
+  board.addEventListener('pointerdown', ev=>{
+    const g=toGrid(ev); if(!g) return;
+    if(done || segs.length>=2) resetAll();
+    drag={a:g, b:g};
+    try{ board.setPointerCapture(ev.pointerId); }catch(e){}
+    showPre();
+    ev.preventDefault();
+  });
+  board.addEventListener('pointermove', ev=>{
+    if(!drag) return;
+    const g=toGrid(ev); if(!g) return;
+    drag.b=straight(drag.a, g);
+    showPre();
+  });
+  function endDrag(ev){
+    if(!drag) return;
+    const s=drag; drag=null;
+    pre.setAttribute('visibility','hidden'); preDot.setAttribute('visibility','hidden');
+    if(s.a[0]===s.b[0] && s.a[1]===s.b[1]){ return; }   // 点だけ（線に ならない）
+    segs.push(norm(s));
+    drawSegs();
+    if(segs.length===1){ say(2,'つぎに、2本めの 線を ひこう。'); }
+    else judge();
+  }
+  board.addEventListener('pointerup', endDrag);
+  board.addEventListener('pointercancel', endDrag);
+  function showPre(){
+    const [x1,y1]=P(drag.a[0],drag.a[1]), [x2,y2]=P(drag.b[0],drag.b[1]);
+    pre.setAttribute('x1',x1); pre.setAttribute('y1',y1); pre.setAttribute('x2',x2); pre.setAttribute('y2',y2);
+    pre.setAttribute('visibility','visible');
+    preDot.setAttribute('cx',x1); preDot.setAttribute('cy',y1); preDot.setAttribute('visibility','visible');
+  }
+
+  // ── 2本 ひいたら ──
+  function cross(o,a,b){ return (a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]); }
+  function onSeg(p,s){ return cross(s.a,s.b,p)===0 && Math.min(s.a[0],s.b[0])<=p[0] && p[0]<=Math.max(s.a[0],s.b[0]) && Math.min(s.a[1],s.b[1])<=p[1] && p[1]<=Math.max(s.a[1],s.b[1]); }
+  function touch(s,t){   // 2本の 線が 交わる・くっつく
+    const d1=cross(t.a,t.b,s.a), d2=cross(t.a,t.b,s.b), d3=cross(s.a,s.b,t.a), d4=cross(s.a,s.b,t.b);
+    if(((d1>0&&d2<0)||(d1<0&&d2>0)) && ((d3>0&&d4<0)||(d3<0&&d4>0))) return true;
+    return onSeg(s.a,t)||onSeg(s.b,t)||onSeg(t.a,s)||onSeg(t.b,s);
+  }
+  function edgesCross(q){   // 四角形の 向かい合う 辺が 交わる（ねじれた 形）か
+    const e=i=>({a:q[i], b:q[(i+1)%4]});
+    return touch(e(0),e(2)) || touch(e(1),e(3));
+  }
+
+  function judge(){
+    const s=segs[0], t=segs[1];
+    const par = (isH(s)===isH(t));
+    if(par && (isH(s) ? s.a[1]===t.a[1] : s.a[0]===t.a[0])){
+      segs.pop(); drawSegs(); soundNG();
+      say(2,'1本めと 同じ 線の 上だよ。はなれた ところに 2本めを ひこう。','bad'); return;
+    }
+    if(touch(s,t)){
+      segs.pop(); drawSegs(); soundNG();
+      say(2,'1本めと くっついて いるよ。はなれた ところに 2本めを ひこう。','bad'); return;
+    }
+    // つなぎ方：a→b→（t の はし）… ねじれない ほうを えらぶ
+    let q=[s.a, s.b, t.b, t.a];
+    if(!par && edgesCross(q)) q=[s.a, s.b, t.a, t.b];
+    done=true;
+    makeShape(q, par);
+  }
+
+  function makeShape(q, par){
+    clearShape();
+    const pts=q.map(p=>P(p[0],p[1]));
+    // つなぐ 線（2本）を のばして いく
+    const L=[[pts[1],pts[2]],[pts[3],pts[0]]];
+    const ls=L.map(([a,b])=>mk('line',{x1:a[0],y1:a[1],x2:a[0],y2:a[1],stroke:'var(--line)','stroke-width':4,'stroke-linecap':'round'},links));
+    say(3,'線の はしと はしを つなぐよ…');
+    const t0=performance.now(), D=700;
+    (function f(now){
+      const p=Math.min(1,(now-t0)/D), e=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+      ls.forEach((l,i)=>{ const [a,b]=L[i]; l.setAttribute('x2',a[0]+(b[0]-a[0])*e); l.setAttribute('y2',a[1]+(b[1]-a[1])*e); });
+      if(p<1) requestAnimationFrame(f); else finish(q, pts, par);
+    })(t0);
+  }
+
+  function finish(q, pts, par){
+    shape.setAttribute('points', pts.map(p=>p.join(',')).join(' '));
+    shape.setAttribute('fill', par ? 'rgba(232,130,14,.18)' : 'rgba(150,150,150,.18)');
+    shape.setAttribute('stroke', 'none');
+    shape.classList.remove('fadein'); void shape.getBoundingClientRect(); shape.classList.add('fadein');
+    const cx=pts.reduce((s,p)=>s+p[0],0)/4, cy=pts.reduce((s,p)=>s+p[1],0)/4;
+    nameT.setAttribute('x',cx); nameT.setAttribute('y',cy);
+    if(!par){
+      soundNG();
+      nameT.textContent='台形じゃない'; nameT.setAttribute('fill','#888');
+      fadeName();
+      say(3,'2本の 線が 平行に なって いないので、台形に ならないね。「かきなおす」で、平行な 2本を ひいて みよう。','bad');
+      return;
+    }
+    // 平行な 2本に しるし（▶）
+    const s=segs[0], t=segs[1];
+    [s,t].forEach(g=>{ const [x1,y1]=P(g.a[0],g.a[1]), [x2,y2]=P(g.b[0],g.b[1]); chevron((x1+x2)/2,(y1+y2)/2,x2-x1,y2-y1,'var(--org)'); });
+    const len=g=>Math.abs(g.b[0]-g.a[0])+Math.abs(g.b[1]-g.a[1]);
+    let nm='台形', msg='台形が できたね！ 向かい合った 1組の 辺が 平行な 四角形だよ。', kind='good';
+    if(len(s)===len(t)){
+      const shift = isH(s) ? (s.a[0]!==t.a[0]) : (s.a[1]!==t.a[1]);
+      const gap = isH(s) ? Math.abs(s.a[1]-t.a[1]) : Math.abs(s.a[0]-t.a[0]);
+      if(shift){ nm='平行四辺形'; msg='2本の 線の 長さが 同じ なので、向かい合った 2組の 辺が 平行な 平行四辺形に なったよ。長さを かえると 台形に なるよ。'; }
+      else if(gap===len(s)){ nm='正方形'; msg='2本の 線の 長さが 同じで、まっすぐ 向かい合って いるので、正方形に なったよ。長さを かえると 台形に なるよ。'; }
+      else { nm='長方形'; msg='2本の 線の 長さが 同じで、まっすぐ 向かい合って いるので、長方形に なったよ。長さを かえると 台形に なるよ。'; }
+      kind='info';
+    }
+    nameT.textContent=nm+'！'; nameT.setAttribute('fill', kind==='good' ? 'var(--ok)' : '#b5640a');
+    fadeName();
+    soundOK();
+    say(3, msg, kind);
+  }
+  function fadeName(){ nameT.style.transition='none'; nameT.setAttribute('opacity','0'); void nameT.getBoundingClientRect(); nameT.style.transition='opacity .6s ease'; nameT.setAttribute('opacity','1'); }
+  function chevron(x,y,dx,dy,color){
+    const L=Math.hypot(dx,dy)||1, ux=dx/L, uy=dy/L, nx=-uy, ny=ux, k=11;
+    const tip=[x+ux*k*0.7, y+uy*k*0.7], b1=[x-ux*k*0.7+nx*k, y-uy*k*0.7+ny*k], b2=[x-ux*k*0.7-nx*k, y-uy*k*0.7-ny*k];
+    mk('polyline',{points:b1.join(',')+' '+tip.join(',')+' '+b2.join(','),fill:'none',stroke:color,'stroke-width':4,'stroke-linecap':'round','stroke-linejoin':'round'},marks);
+  }
+
+  $('btnReset').addEventListener('click', resetAll);
+  resetAll();
+})();
+<\/script>
+</script>
+
 <script type="text/html" id="srcHishi">
 <!--
   ひし形のかき方（小4 算数）／ v1（アプリ v51 で 新設）
@@ -3996,6 +4306,7 @@ buildNote(); makeView(); intro();
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fSui'},'*')">垂直</button>
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fHei'},'*')">平行</button>
     <button class="snb" onclick="parent.postMessage({type:'sub',id:'fPg'},'*')">平行四辺形</button>
+    <button class="snb" onclick="parent.postMessage({type:'sub',id:'fDaikei'},'*')">台形</button>
     <button class="snb on">ひし形</button>
     <button class="snb help" onclick="parent.postMessage({type:'sub',id:'fPgHelp'},'*')">平行四辺形のお助け</button>
     <button class="snb more" onclick="parent.postMessage({type:'sub',id:'fPgMore'},'*')">平行四辺形さらに</button>
@@ -4168,11 +4479,18 @@ const SHAPES=(function(){ const out=[];
     if(r<=CMIN || r>CMAX || r>RULER_MAX) continue;          // コンパスが 開く／ものさしで はかれる
     for(let d=1; d<=9; d++){
       if(d>=2*r-0.6) continue;                              // こ が ちゃんと 交わる
+      if(d===r) continue;                                   // ★v114 こ が 向こうの 点（A・B）の 上を 通らない（へんの 長さ ≠ AB）
       const s=mkShape(r,d), bb=bboxOf(s);
       const ratio=s.h/s.d;
       if(ratio<RATIO_MIN || ratio>RATIO_MAX) continue;      // ひし形らしい 形だけ
-      if(bb.w*RCM>BOXW || bb.h*RCM>BOXH) continue;          // 画面（見本の枠の 手前まで）に 入る
-      s.bb=bb; out.push(s);
+      if(!(bb.w*RCM>BOXW || bb.h*RCM>BOXH)){                // 画面（見本の枠の 手前まで）に 入る
+        s.bb=bb; s.ori='v'; out.push(s);                    // ★v116 たて（A 上・B 下）
+      }
+      /* ★v116 よこ（A 左・B 右）…たての 図を 左へ 90° 回した 形。(x,y)→(y,-x) */
+      const bh={w:bb.h, h:bb.w, cx:bb.cy, cy:-bb.cx};
+      if(!(bh.w*RCM>BOXW || bh.h*RCM>BOXH)){
+        const t=mkShape(r,d); t.bb=bh; t.ori='h'; out.push(t);
+      }
     }
   }
   return out; })();
@@ -4186,11 +4504,18 @@ const STAGE_DIR=0;                                // はかる 向き（度）�
 
 function setShape(s){
   SH=s; R=s.r*RCM; SPAN=s.span;
-  const O={x:CX - s.bb.cx*RCM, y:CY - s.bb.cy*RCM};   // こ も 入れて まん中に そろえる
+  const O={x:CX - s.bb.cx*RCM, y:(s.ori==='h'?CY+40:CY) - s.bb.cy*RCM};   // こ も 入れて まん中に そろえる（★v116 よこは コンパスが 上に はみ出ないよう 40 下げる）
+  if(s.ori==='h'){   // ★v116 よこ：A 左・B 右・C 上・D 下
+  V.A={x:O.x - s.d/2*RCM,   y:O.y};
+  V.B={x:O.x + s.d/2*RCM,   y:O.y};
+  V.C={x:O.x,               y:O.y - s.h/2*RCM};
+  V.D={x:O.x,               y:O.y + s.h/2*RCM};
+  }else{
   V.A={x:O.x,               y:O.y - s.d/2*RCM};
   V.B={x:O.x,               y:O.y + s.d/2*RCM};
   V.C={x:O.x + s.h/2*RCM,   y:O.y};
   V.D={x:O.x - s.h/2*RCM,   y:O.y};
+  }
   Gc={x:O.x, y:O.y};
   // 長い へんだと めもりが 画面から 出るので、はかる ところを 左へ つめる
   STAGE={x:Math.min(475, 880-(s.r+0.7)*RCM), y:540};
@@ -4278,7 +4603,8 @@ function buildVtx(){
     t.setAttribute('x',p.x+dx); t.setAttribute('y',p.y+dy); t.setAttribute('id','lbl'+id); t.setAttribute('class','fade');
     t.textContent=label; g.appendChild(t);
   };
-  mk(V.A,'A',0,-14,'A'); mk(V.B,'B',0,32,'B'); mk(V.C,'C',20,10,'C'); mk(V.D,'D',-20,10,'D');
+  if(SH.ori==='h'){ mk(V.A,'A',-20,10,'A'); mk(V.B,'B',20,10,'B'); mk(V.C,'C',0,-14,'C'); mk(V.D,'D',0,32,'D'); }   // ★v116 よこ
+  else{ mk(V.A,'A',0,-14,'A'); mk(V.B,'B',0,32,'B'); mk(V.C,'C',20,10,'C'); mk(V.D,'D',-20,10,'D'); }
 }
 
 /* ============ 説明文（全角29字いない！ 2行を こえると 図が 縮む） ============ */
@@ -4302,7 +4628,7 @@ function buildRefFig(){
     for(const k in at) e.setAttribute(k,at[k]); if(txt!=null) e.innerHTML=txt; g.appendChild(e); return e; };
   const BOX={x:596,y:40,w:266,h:192};                 // 枠（SVGの rect と 同じ）
   const AREA={w:168, h:98};                           // 図に つかう ところ（まわりは ラベル用）
-  const sc=Math.min(AREA.w/(SH.h*RCM), AREA.h/(SH.d*RCM));
+  const sc=(SH.ori==='h') ? Math.min(AREA.w/(SH.d*RCM), AREA.h/(SH.h*RCM)) : Math.min(AREA.w/(SH.h*RCM), AREA.h/(SH.d*RCM));   // ★v116 よこ
   const Pt=k=>({x:BOX.x+BOX.w/2 + (V[k].x-Gc.x)*sc, y:BOX.y+BOX.h/2+22 + (V[k].y-Gc.y)*sc});
   const A=Pt('A'), B=Pt('B'), C=Pt('C'), D=Pt('D');
   add('polygon',{points:`${A.x},${A.y} ${C.x},${C.y} ${B.x},${B.y} ${D.x},${D.y}`,
@@ -4315,10 +4641,11 @@ function buildRefFig(){
   });
   [A,B,C,D].forEach(p=>add('circle',{cx:p.x, cy:p.y, r:4, fill:'var(--red)'}));
   const lbl=(p,t,dx,dy)=>add('text',{x:p.x+dx, y:p.y+dy, 'font-size':19, fill:'var(--red)', 'text-anchor':'middle'}, t);
-  lbl(A,'A',0,-9); lbl(B,'B',0,22); lbl(C,'C',14,17); lbl(D,'D',-14,17);
+  if(SH.ori==='h'){ lbl(A,'A',-12,7); lbl(B,'B',12,7); lbl(C,'C',0,-9); lbl(D,'D',0,22); }   // ★v116 よこ
+  else{ lbl(A,'A',0,-9); lbl(B,'B',0,22); lbl(C,'C',14,17); lbl(D,'D',-14,17); }
   /* へんの 長さは へんACに 1つだけ（4つとも 同じ なので） */
   const ac=awaySide(V.A,V.C);
-  add('text',{x:(A.x+C.x)/2 + ac.pr.x*22, y:(A.y+C.y)/2 + ac.pr.y*22+5, 'font-size':15, fill:'#444',
+  add('text',{x:(A.x+C.x)/2 + ac.pr.x*27, y:(A.y+C.y)/2 + ac.pr.y*27+7, 'font-size':21, 'font-weight':700, fill:'#444',   // ★v117 長さの 字を 大きく（15→21）
     'text-anchor':'middle'}, cmTxt(SH.r));
 }
 
@@ -4333,8 +4660,8 @@ function render(n){   // アニメなしで 状態nを 出す
   ['sAC','sCB','sBD','sDA'].forEach(id=>{ const e=$(id); e.style.strokeDasharray=''; e.style.strokeDashoffset=''; show(e,false); });
   $('arcA').setAttribute('d',''); $('arcB').setAttribute('d','');
   vtxOn('A',true); vtxOn('B',true); vtxOn('C',false); vtxOn('D',false);
-  if(n>=1) $('arcA').setAttribute('d', arcPath(V.A,R,90-SPAN,90+SPAN));
-  if(n>=2) $('arcB').setAttribute('d', arcPath(V.B,R,-90-SPAN,-90+SPAN));
+  if(n>=1) $('arcA').setAttribute('d', arcPath(V.A,R,midFor('A')-SPAN,midFor('A')+SPAN));   // ★v116 よこも
+  if(n>=2) $('arcB').setAttribute('d', arcPath(V.B,R,midFor('B')-SPAN,midFor('B')+SPAN));
   if(n>=3){ vtxOn('C',true); vtxOn('D',true); }
   if(n>=4){ setLine($('sAC'),V.A,V.C); setLine($('sCB'),V.C,V.B); setLine($('sBD'),V.B,V.D); setLine($('sDA'),V.D,V.A);
     ['sAC','sCB','sBD','sDA'].forEach(id=>show($(id),true)); }
@@ -4357,12 +4684,12 @@ async function goNext(auto){
   try{
     if(n===1){
       tOpen=await measureRadius(STAGE, R, cmTxt(SH.r));
-      curDir=await moveCompass(STAGE, V.A, tOpen, STAGE_DIR, 90-SPAN);
-      curDir=await drawArcOpen(V.A, R, tOpen, 90, SPAN, $('arcA'), false);
+      curDir=await moveCompass(STAGE, V.A, tOpen, STAGE_DIR, midFor('A')-SPAN);   // ★v116 よこも
+      curDir=await drawArcOpen(V.A, R, tOpen, midFor('A'), SPAN, $('arcA'), false);
     }else if(n===2){
-      if(!tOpen){ tOpen=openingForRadius(R); curDir=90+SPAN; setPose(V.A,tOpen,curDir-pencilAngleAt(tOpen),SCALE); await animate(0,1,260,()=>{},ease); }
-      curDir=await moveCompass(V.A, V.B, tOpen, curDir, -90-SPAN);
-      curDir=await drawArcOpen(V.B, R, tOpen, -90, SPAN, $('arcB'), true);
+      if(!tOpen){ tOpen=openingForRadius(R); curDir=midFor('A')+SPAN; setPose(V.A,tOpen,curDir-pencilAngleAt(tOpen),SCALE); await animate(0,1,260,()=>{},ease); }
+      curDir=await moveCompass(V.A, V.B, tOpen, curDir, midFor('B')-SPAN);
+      curDir=await drawArcOpen(V.B, R, tOpen, midFor('B'), SPAN, $('arcB'), true);
     }else if(n===3){
       vtxOn('C',true); vtxOn('D',true); await animate(0,1,650,()=>{},ease);
     }else if(n===4){
@@ -4483,7 +4810,8 @@ function handHint(open){ const b=$('hintBox'); if(!hand) return; const a=curAct(
   b.classList.toggle('show',open); }
 
 /* いまの ようすを 画面に 出す */
-function midFor(vtxKey){ return vtxKey==='A' ? 90 : -90; }   // A＝下向きの こ／B＝上向きの こ
+function midFor(vtxKey){ if(SH.ori==='h') return vtxKey==='A' ? 0 : -180;   // ★v116 よこ：A＝右向きの こ／B＝左向きの こ
+  return vtxKey==='A' ? 90 : -90; }   // A＝下向きの こ／B＝上向きの こ
 function nearestFree(p){   // まだ さして いない 点の うち、近い ほう
   const free=['A','B'].filter(k=>!hand.stuck.includes(k));
   let best=free[0], bd=Infinity;
@@ -4622,7 +4950,7 @@ board.addEventListener('pointerup', handUp);
 board.addEventListener('pointercancel', handUp);
 
 
-setShape(SHAPES.find(s=>s.r===4 && s.d===4) || SHAPES[0]);
+setShape(SHAPES.find(s=>s.r===4 && s.d===5 && s.ori==='v') || SHAPES[0]);   // ★v115 はじめは へん 4cm・AB 5cm（正方形っぽく ならない。こ は 点Bの 1cm 手前で 点Bを 通らない）
 baseSetup();
 render(0);
 
@@ -5016,17 +5344,28 @@ function arcPath(c,r,a0,a1){ const d=shortDelta(a0,a1); a1=a0+d;   // かなら�
 /* ============ 図の 形（t＝斜めの 鋭角、sgn＝斜めの 向き） ============ */
 const TS=[40,45,50,55,60,65,70,75,80];
 let t=60, sgn=1;                 // sgn=+1：右上がり／-1：左上がり
+let one=false;                   // ★v123 true：斜めの 線が ク の 1本だけ（あ・い だけ もとめる）
 let yKa=195, yKi=425;            // カ（上）・キ（下）の y
 let dirv={x:0,y:0};              // 斜め線の 上向き 単位ベクトル
 let P={};                        // 交点など
 let items=[];                    // あ〜お の 問題
 let done=0, sel=null, locked={};
 
-function setFig(nt,ns){
-  t=nt; sgn=ns;
+function setFig(nt,ns,n1){
+  t=nt; sgn=ns; one=!!n1;   // ★v123 n1：斜めの 線 1本
   dirv={x:sgn*Math.cos(t*RAD), y:-Math.sin(t*RAD)};   // 上向き（画面yは下）
   // ク が キ を 横切る x、ケ が キ を 横切る x
-  const xKu = sgn>0? 410 : 470, xKe = sgn>0? 630 : 250;
+  /* ★v123 右上がりで 考えて、左上がりは 左右反転（880−x）。
+     角が 小さい（ねて いる）と 線が 図の 外へ 出るので、はみ出す ときは 左へ よせる。
+     1本の ときは 線の まん中が 図の まん中に くる ように する。 */
+  const cot=1/Math.tan(t*RAD), topDx=(yKi-120)*cot, botDx=(565-yKi)*cot;
+  let rKu, rKe;
+  if(one){ rKu=440-(topDx-botDx)/2; rKe=rKu; }
+  else{
+    rKe=Math.min(630, 845-topDx); rKu=rKe-220;
+    if(rKu-botDx<25) rKu=25+botDx;
+  }
+  const xKu = sgn>0? rKu : 880-rKu, xKe = sgn>0? rKe : 880-rKe;
   const onKi=(x)=>({x, y:yKi});
   const up=(base,y)=>{ const s=(y-yKi)/dirv.y; return {x:base.x+s*dirv.x, y}; };  // 交点(base,yKi)から yへ
   const KuKi=onKi(xKu), KeKi=onKi(xKe);
@@ -5046,7 +5385,7 @@ function setFig(nt,ns){
 let baseAng=60;                       // 手がかりに 見せる 角（drawGiven が つかう）
 function buildItems(){
   const angOf=(v)=>Math.atan2(v.y,v.x)/RAD;
-  const R={x:1,y:0}, L={x:-1,y:0};
+  const R={x:sgn,y:0}, L={x:-sgn,y:0};   // ★v123 左上がりの ときは 左右を 入れかえる（図ぜんたいが 左右反転）
   const U={x:dirv.x,y:dirv.y}, D={x:-dirv.x,y:-dirv.y};   // 斜めの 上・下
   // ある 角を 2つの むきで 決める。答えは その 内がわの 角（=|shortDelta|、180°以下）。
   function wedge(center,d1,d2){ const a0=angOf(d1), del=shortDelta(a0,angOf(d2));
@@ -5056,10 +5395,11 @@ function buildItems(){
   items=[
     {key:'あ', why:'手がかりの 角と 同位角（カ∥キ）', ...wedge(c,R,U)},   // キ右 と 斜め上
     {key:'い', why:'あと 一直線 で 180°',            ...wedge(c,U,L)},   // 斜め上 と キ左
-    {key:'う', why:'あの 対頂角',                    ...wedge(c,L,D)},   // キ左 と 斜め下
-    {key:'え', why:'いの 対頂角',                    ...wedge(c,D,R)},   // 斜め下 と キ右
-    {key:'お', why:'いと 同位角（ク∥ケ）',           ...wedge(P.KeKi,U,L)}, // ケ∩キ、いと 同じ 位置
   ];
+  if(!one) items.push(   // ★v123 斜めの 線 1本の ときは あ・い だけ／2本の ときは え を 出さない（あ・い・う・お）
+    {key:'う', why:'あの 対頂角',                    ...wedge(c,L,D)},   // キ左 と 斜め下
+    {key:'お', why:'いと 同位角（ク∥ケ）',           ...wedge(P.KeKi,U,L)}  // ケ∩キ、いと 同じ 位置
+  );
   done=0; sel=null; locked={};
 }
 
@@ -5070,18 +5410,18 @@ function drawFig(){
   // 横線 カ・キ
   L({x:P.xL,y:yKa},{x:P.xR,y:yKa}); L({x:P.xL,y:yKi},{x:P.xR,y:yKi});
   // 斜め線 ク・ケ
-  L(P.kuTop,P.kuBot); L(P.keTop,P.keBot);
+  L(P.kuTop,P.kuBot); if(!one) L(P.keTop,P.keBot);   // ★v123 1本の ときは ケ なし
   // ラベル カキクケ
   const lab=(p,txt,dx,dy)=>el(g,'text',{x:p.x+dx,y:p.y+dy,'font-size':26,'font-weight':800,fill:'var(--green-d)','text-anchor':'middle'},txt);
   lab({x:P.xL,y:yKa},'カ',-6,8); lab({x:P.xL,y:yKi},'キ',-6,8);
-  lab(P.kuTop,'ク',0,-12); lab(P.keTop,'ケ',0,-12);
+  lab(P.kuTop,'ク',0,-12); if(!one) lab(P.keTop,'ケ',0,-12);
 }
 function drawGiven(){
   // ク∩カ の 手がかりの 角（あ と 同位角）。キ右 と 斜め上 の あいだ
   const g=$('marks');
   const c=P.KuKa;
   const angOf=(v)=>Math.atan2(v.y,v.x)/RAD;
-  const R={x:1,y:0}, U={x:dirv.x,y:dirv.y};
+  const R={x:sgn,y:0}, U={x:dirv.x,y:dirv.y};   // ★v123 左上がりの ときは カの左（手がかりの 角は いつも 鋭角）
   const a0=angOf(R), del=shortDelta(a0,angOf(U));
   el(g,'path',{d:arcPath(c,30,a0,a0+del),fill:'none',stroke:'var(--red)','stroke-width':3});
   const lp=polar(c,54,a0+del/2);
@@ -5175,7 +5515,7 @@ document.addEventListener('keydown', e=>{
 function say(msg){ $('stepText').innerHTML='<span>'+msg+'</span>'; }   // 1つの かたまりに して 1行に
 /* v87：「○ / 5 正解」の 表示は 10問チャレンジの 帯と かさなるので やめた。
    左の まる（stepNo）の 数字だけ のこして ある。 */
-function setProgress(){ $('stepNo').textContent = done>=5?'✓':(done+1); }
+function setProgress(){ $('stepNo').textContent = done>=items.length?'✓':(done+1); }   // ★v123 5 → items.length（1本の ときは 2）
 
 /* あ→い→う→え→お の じゅんばんに、じどうで 出す */
 let nextTimer=null;
@@ -5207,7 +5547,7 @@ function answer(v){
     playOK();
     /* v89：はなまるは あ〜お ぜんぶ 正解した ときだけ（1つずつは 音と みどりの 数字だけ） */
     Challenge10.done();                  /* ★10問チャレンジ：1問 できた */
-    if(done>=5) finish();
+    if(done>=items.length) finish();   // ★v123
     else if(!Challenge10.isOn())         /* チャレンジ中は モジュールが 次へ 進める */
       nextTimer=setTimeout(()=>{ nextTimer=null; nextItem(); }, 1500);
   }else{
@@ -5235,7 +5575,7 @@ function showHint(){
   const it=items[sel], A=items[0], I=items[1], U=items[2];
   const RED='var(--red)';
   const angOf=(v)=>Math.atan2(v.y,v.x)/RAD;
-  const Rv=angOf({x:1,y:0}), Lv=angOf({x:-1,y:0}), Uv=angOf(dirv), Dv=angOf({x:-dirv.x,y:-dirv.y});
+  const Rv=angOf({x:sgn,y:0}), Lv=angOf({x:-sgn,y:0}), Uv=angOf(dirv), Dv=angOf({x:-dirv.x,y:-dirv.y});
   /* 赤かっこ：c を 中心に from → mid → to の 半円（180°） */
   function bracket(c, from, mid, to){
     const r=92, p0=polar(c,r,from), pm=polar(c,r,mid), p1=polar(c,r,to);
@@ -5265,13 +5605,13 @@ function showHint(){
     redArc(it,26);
     formula(`${baseAng}° と 同じ 大きさ（同じ 位置の 角）`);
   }else if(it.key==='い'){      // あ ＋ い ＝ 180°（キの 上がわ）
-    bracket(c, Rv, Rv-90, Lv); redArc(A);
+    bracket(c, Rv, -90, Lv); redArc(A);   // ★v123 まん中は いつも 真上（-90）
     formula(`180° − ${A.ans}° ＝ ？°`);
   }else if(it.key==='う'){      // い ＋ う ＝ 180°（クの 左がわ）
     bracket(c, Uv, Lv, Dv); redArc(I);
     formula(`180° − ${I.ans}° ＝ ？°`);
   }else if(it.key==='え'){      // う ＋ え ＝ 180°（キの 下がわ）
-    bracket(c, Lv, Lv-90, Rv); redArc(U);
+    bracket(c, Lv, 90, Rv); redArc(U);   // ★v123 まん中は いつも 真下（90）
     formula(`180° − ${U.ans}° ＝ ？°`);
   }else{                        // お … い と 同位角
     redArc(I); redArc(it);
@@ -5324,11 +5664,17 @@ function finish(){
 
 /* ============ そうさ ============ */
 /* ※ 図を タップして 角を えらぶ しくみは やめた（あ→お の じゅんばんに 出す ため）*/
+const dirBag={one:[], two:[-1]};   // ★v123 向きの ふくろ（はじめの 図は 2本・右上がり なので 次の 2本は 左上がり）
 function newFigure(){
   if(nextTimer){ clearTimeout(nextTimer); nextTimer=null; }
   clr($('hana'));
   const nt=TS[Math.floor(Math.random()*TS.length)];
-  setFig(nt,1);   // 斜めは つねに 右上がり（教科書と 同じ 向き。手がかりの 角は かならず 鋭角）
+  /* ★v123 斜めの 線 1本 と 2本 を 交互に。向き（右上がり／左上がり）は 1本・2本 それぞれ
+     2回の うちに 1回ずつ（順番は ランダム）出す ので、同じくらいの 回数に なる。 */
+  const n1=!one;
+  const bag=n1?dirBag.one:dirBag.two;
+  if(!bag.length){ bag.push(1,-1); if(Math.random()<0.5) bag.reverse(); }
+  setFig(nt, bag.shift(), n1);
   drawFig(); drawMarks(); clr($('hintg'));
   $('hintBox').classList.remove('show'); setProgress();
   nextItem();
@@ -5459,6 +5805,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
     font-size:clamp(12px,3vw,17px); font-weight:700; line-height:1.4}
   .zq b{color:var(--green-d)}
   .zq .qq{color:#c22; font-weight:800}
+  .zq .qbig{display:block; font-size:clamp(16px,4.2vw,26px); line-height:1.3; margin-top:1px}   /* ★v121 図形ページの 問題文：段を かえて 大きく */
   .zgrid{display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(2,1fr);
     gap:clamp(4px,1.2vh,11px); width:100%; max-width:860px; height:100%}
   .zcard{background:#fff; border:3px solid #cfe3cf; border-radius:14px; padding:3px 3px 10px; cursor:pointer;
@@ -5481,6 +5828,36 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
   #btnZNext{border:3px solid var(--ask); background:#fff; color:#b5640a}
   #hana.show{opacity:1; transition:opacity .15s}
   #hana.fade{opacity:0; transition:opacity .8s ease}
+
+  /* ── 「対角線の特ちょう」ページ（★v122 新設）── */
+  .dwrap{width:100%; max-width:980px; height:100%; display:flex; gap:clamp(6px,1.6vw,16px); align-items:stretch}
+  .dfig{flex:1 1 auto; min-width:0; background:#fff; border:3px solid #cfe3cf; border-radius:14px;
+    display:flex; align-items:center; justify-content:center; padding:5px}
+  .dfig svg{width:100%; height:100%; display:block}
+  .dside{flex:0 0 clamp(170px,26vw,250px); min-height:0; display:flex; flex-direction:column; justify-content:center; gap:clamp(6px,1.6vh,14px)}
+  .dch{font-family:inherit; font-size:clamp(17px,4.2vh,28px); font-weight:800; color:var(--ink); background:#fff;
+    border:3px solid #cfe3cf; border-radius:14px; padding:clamp(6px,1.7vh,15px) 8px; cursor:pointer; position:relative;
+    box-shadow:0 3px 0 #dbe8db; transition:background .12s, border-color .12s, color .12s}
+  .dch:hover{background:#f2faf3}
+  .dch.ok{border-color:var(--ok); background:#eefaf0; color:var(--ok)}
+  .dch.ng{border-color:var(--red); background:#fdeeee; color:var(--red)}
+  .dch .mk{position:absolute; right:10px; top:50%; transform:translateY(-50%); font-weight:900}
+  #dSides{opacity:0; transition:opacity .5s ease}
+  #dSides.on{opacity:1}
+  #hanaD{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:clamp(140px,38vw,215px);
+    pointer-events:none; opacity:0; filter:drop-shadow(0 6px 12px rgba(0,0,0,.25))}
+  #hanaD.show{opacity:1; transition:opacity .15s}
+  #hanaD.fade{opacity:0; transition:opacity .8s ease}
+  #btnDNext{border:3px solid var(--ask); background:#fff; color:#b5640a}
+  @media (max-width:620px){
+    .dwrap{flex-direction:column; gap:5px}
+    .dside{flex:0 0 auto; display:grid; grid-template-columns:1fr 1fr}
+    .dfig{flex:1 1 auto; min-height:0}
+    .dside{gap:6px}
+    .dch{font-size:clamp(15px,2.6vh,20px); padding:6px 4px}
+    .tnav{flex-wrap:wrap; margin-left:0}
+    .tnb{white-space:nowrap; padding:4px 11px}   /* 小タブが 5つに なったので 2行に */
+  }
 
   /* ── 「点を移動」ページ（v86）── */
   .twrap{width:100%; max-width:920px; height:100%; display:flex; gap:clamp(6px,1.6vw,16px); align-items:stretch}
@@ -5550,16 +5927,17 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
 <header>
   <h1>四角形の 特ちょう</h1>
   <div class="tnav">
-    <button class="tnb on" id="tnHyo" onclick="showPane('hyo')">表</button>
-    <button class="tnb" id="tnZu" onclick="showPane('zu')">図形</button>
+    <button class="tnb on" id="tnZu" onclick="showPane('zu')">図形の特ちょう</button>
+    <button class="tnb" id="tnDg" onclick="showPane('dg')">対角線の特ちょう</button>
+    <button class="tnb" id="tnHyo" onclick="showPane('hyo')">表</button>
     <button class="tnb" id="tnTai" onclick="showPane('tai')">点を移動</button>
     <button class="tnb" id="tnKan" onclick="showPane('kan')">四角形の関係</button>
   </div>
-  <span class="sub">形を タップ すると <b>対角線</b> が 見えるよ（ヒント）</span>
+  <span class="sub">あてはまる 形を <b>ぜんぶ</b> えらんで「決定」</span>
 </header>
 
 <!-- ── 表 ── -->
-<div id="paneHyo" class="pane show">
+<div id="paneHyo" class="pane">
 <main>
   <div class="wrap">
     <table id="tbl"></table>
@@ -5578,7 +5956,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
 </div>
 
 <!-- ── 図形 ── -->
-<div id="paneZu" class="pane">
+<div id="paneZu" class="pane show">
   <div class="zq" id="zq"></div>
   <main>
     <div class="zgrid" id="zgrid"></div>
@@ -5590,6 +5968,30 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
       <button class="hintbtn" id="btnZHint">&#128161; ヒント</button>
       <button id="btnZNext">次の もんだい</button>
       <button id="btnZCheck">決定</button>
+    </div>
+  </footer>
+</div>
+
+<!-- ── 対角線の特ちょう（★v122）── -->
+<div id="paneDg" class="pane">
+  <div class="zq" id="dq">対角線の 長さ や 交わり方 を 見て、何の 四角形か あてよう。<span class="qq qbig">この 対角線の 四角形は 何でしょう。</span></div>
+  <main>
+    <div class="dwrap">
+      <div class="dfig"><svg id="dsvg" viewBox="0 0 600 440" xmlns="http://www.w3.org/2000/svg"></svg></div>
+      <div class="dside" id="dside">
+        <button class="dch" data-k="para">平行四辺形<span class="mk"></span></button>
+        <button class="dch" data-k="rhom">ひし形<span class="mk"></span></button>
+        <button class="dch" data-k="rect">長方形<span class="mk"></span></button>
+        <button class="dch" data-k="squ">正方形<span class="mk"></span></button>
+      </div>
+    </div>
+    <img id="hanaD" alt="はなまる">
+  </main>
+  <footer>
+    <div class="msg" id="dmsg"></div>
+    <div class="btns">
+      <button class="hintbtn" id="btnDHint">&#128161; ヒント</button>
+      <button id="btnDNext">次の もんだい</button>
     </div>
   </footer>
 </div>
@@ -5870,8 +6272,8 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
       {n:'四角形',     p:[[15,72],[38,14],[64,28],[82,72]]},
       {n:'長方形',     p:[[12,26],[88,26],[88,74],[12,74]]},
       {n:'台形',       p:[[24,24],[62,24],[88,76],[10,76]]},
-      {n:'ひし形',     p:[[50,14],[90,50],[50,86],[10,50]]},
-      {n:'平行四辺形', p:[[28,24],[92,24],[72,76],[8,76]]},
+      {n:'ひし形',     p:[[50,22],[96,50],[50,78],[4,50]]},     // ★v121 横に のばした（もとは [50,14],[90,50],[50,86],[10,50]）
+      {n:'平行四辺形', p:[[26,30],[94,30],[74,72],[6,72]]},     // ★v121 横長に（もとは [28,24],[92,24],[72,76],[8,76]）
       {n:'正方形',     p:[[24,22],[78,22],[78,76],[24,76]]}
     ];
     const V=(a,b)=>[b[0]-a[0], b[1]-a[1]];
@@ -5957,7 +6359,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
         g+=seg(p[0],p[2],RED,4)+seg(p[1],p[3],RED,4);
         if(hl==='diagperp') g+=crossAt(p,RED);
       }
-      return '<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">'+g+'</svg>';
+      return '<svg viewBox="0 10 100 80" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">'+g+'</svg>';   // ★v121 上下の 空きを へらして 図と 名前の 間を つめる
     }
 
     // ── 💡 ヒント（v90）… 6つ 全部の 形に しるしを 出す（同じ色＝同じ 長さ・平行・同じ 大きさ）──
@@ -5998,7 +6400,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
         g+=seg(p[0],p[2],BLUE,4)+seg(p[1],p[3],BLUE,4);
         if(P.diagPerp) g+=crossAt(p,RED);
       }
-      return '<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">'+g+'</svg>';
+      return '<svg viewBox="0 10 100 80" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">'+g+'</svg>';   // ★v121 上下の 空きを へらして 図と 名前の 間を つめる
     }
 
     // ── 画面 ──
@@ -6055,7 +6457,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
       cur=ZQ[order[oi++]];
       sel=ZP.map(()=>false); done=false;
       zh=false; zHintBtn.classList.remove('on');
-      zqEl.innerHTML='次の 中から、あてはまる ものを <b>ぜんぶ</b> えらんで「決定」を おしましょう。　<span class="qq">'+cur.t+'</span>';
+      zqEl.innerHTML='次の 中から、あてはまる ものを <b>ぜんぶ</b> えらんで「決定」を おしましょう。<span class="qq qbig">【問題】'+cur.t+'</span>';   // ★v121 段を かえて 大きく　★v123 【問題】を つける
       if(hz){ clearTimeout(hz); hz=null; }
       hanaZ.classList.remove('show','fade');
       render(); zsay(HINT);
@@ -6433,22 +6835,155 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
     draw();
   })();
 
+  // ══════════════════ 「対角線の特ちょう」ページ（★v122 新設）══════════════════
+  // 2本の 対角線（半分ずつの 長さ と、垂直なら 直角の しるし）を 見せて、何の 四角形か あてる。
+  //   平行四辺形 … 長さ ちがう・垂直でない ／ ひし形 … 長さ ちがう・垂直
+  //   長方形     … 長さ 同じ・垂直でない   ／ 正方形 … 長さ 同じ・垂直
+  //   ※ どれも 対角線は まん中で 交わる（半分ずつの 長さが 等しい）。
+  // 💡 ヒント … 対角線の はしを つないで 形を 見せる。正解の あとも 形を 見せる。
+  (function(){
+    const NS='http://www.w3.org/2000/svg';
+    const svg=document.getElementById('dsvg'), msgEl=document.getElementById('dmsg');
+    const hanaD=document.getElementById('hanaD'); hanaD.src=HANA_B64;
+    const hintBtn=document.getElementById('btnDHint');
+    const chBtns=[...document.querySelectorAll('#dside .dch')];
+    const NAME={para:'平行四辺形', rhom:'ひし形', rect:'長方形', squ:'正方形'};
+    const FEAT={para:{eq:false,pp:false}, rhom:{eq:false,pp:true}, rect:{eq:true,pp:false}, squ:{eq:true,pp:true}};
+    const CM=46, O={x:300,y:220}, RED='#e23c3c', BLUE='#2f7dd1';
+    const pick=a=>a[Math.floor(Math.random()*a.length)];
+    const dir=d=>{ const r=d*Math.PI/180; return {x:Math.cos(r), y:-Math.sin(r)}; };   // 画面の 上むきを ＋に
+    let cur=null, done=false, hint=false, order=[], hz=null, lastK=null;
+
+    function say(t,k){ msgEl.innerHTML=t; msgEl.className='msg'+(k?(' '+k):''); }
+    function el(tag,at,txt){ const e=document.createElementNS(NS,tag); for(const k in at) e.setAttribute(k,at[k]); if(txt!=null) e.textContent=txt; svg.appendChild(e); return e; }
+    function beepNG(){   // ブブー（ネット不要）
+      try{
+        const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+        const ac=new AC(), t0=ac.currentTime, o=ac.createOscillator(), g=ac.createGain();
+        o.type='square'; o.frequency.value=150;
+        g.gain.setValueAtTime(0.0001,t0); g.gain.exponentialRampToValueAtTime(0.18,t0+0.02);
+        g.gain.setValueAtTime(0.18,t0+0.42); g.gain.exponentialRampToValueAtTime(0.0001,t0+0.5);
+        o.connect(g); g.connect(ac.destination); o.start(t0); o.stop(t0+0.52);
+        setTimeout(()=>{ try{ ac.close(); }catch(e){} },900);
+      }catch(e){}
+    }
+    function showHanaD(after){
+      if(hz) clearTimeout(hz);
+      hanaD.classList.remove('fade'); hanaD.classList.add('show');
+      hz=setTimeout(()=>{
+        hanaD.classList.remove('show'); hanaD.classList.add('fade');
+        hz=setTimeout(()=>{ hz=null; if(after) after(); }, 800);
+      },2000);
+    }
+
+    // ── もんだいを 作る ──
+    function make(k){
+      let a,b,phi;
+      if(k==='squ'){ a=b=pick([3,4]); phi=90; }
+      else if(k==='rect'){ a=b=pick([3,4]); phi=pick([50,60,70]); }
+      else { const pr=pick([[4,2],[4,3],[3,2],[2,4],[3,4],[2,3]]); a=pr[0]; b=pr[1]; phi=(k==='rhom')?90:pick([50,60,70]); }
+      const th=pick([0,20,-20,45,-45]);
+      return {k,a,b,phi,th};
+    }
+    function draw(){
+      svg.textContent='';
+      const q=cur, u1=dir(q.th), u2=dir(q.th+q.phi);
+      const P=(u,L)=>({x:O.x+u.x*L*CM, y:O.y+u.y*L*CM});
+      const E1=P(u1,q.a), E3=P(u1,-q.a), E2=P(u2,q.b), E4=P(u2,-q.b);
+      // 形（ヒント・正解の あと）… 対角線の 下に
+      const g=document.createElementNS(NS,'g'); g.id='dSides'; if(hint||done) g.classList.add('on'); svg.appendChild(g);
+      const poly=document.createElementNS(NS,'polygon');
+      poly.setAttribute('points',[E1,E2,E3,E4].map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' '));
+      poly.setAttribute('fill','#d8e9f6'); poly.setAttribute('stroke','#1f2430'); poly.setAttribute('stroke-width',4); poly.setAttribute('stroke-linejoin','round');
+      g.appendChild(poly);
+      // 対角線
+      el('line',{x1:E1.x,y1:E1.y,x2:E3.x,y2:E3.y,stroke:RED,'stroke-width':5,'stroke-linecap':'round'});
+      el('line',{x1:E2.x,y1:E2.y,x2:E4.x,y2:E4.y,stroke:BLUE,'stroke-width':5,'stroke-linecap':'round'});
+      // 直角の しるし
+      if(q.phi===90){ const r=17, A={x:O.x+u1.x*r,y:O.y+u1.y*r}, B={x:O.x+u2.x*r,y:O.y+u2.y*r}, M={x:A.x+u2.x*r,y:A.y+u2.y*r};
+        el('path',{d:`M${A.x} ${A.y} L${M.x} ${M.y} L${B.x} ${B.y}`,fill:'none',stroke:'#1f2430','stroke-width':3}); }
+      // 長さ（半分ずつ）… 広い ほうの すきまに 書く
+      const lbl=(u,v,L,col)=>{ [1,-1].forEach(sg=>{
+        const w={x:u.x*sg,y:u.y*sg};
+        let best=null;
+        [1,-1].forEach(s2=>{ const n={x:-w.y*s2,y:w.x*s2};
+          const r=(v.x*n.x+v.y*n.y)>0 ? v : {x:-v.x,y:-v.y};
+          const ang=Math.acos(Math.max(-1,Math.min(1,w.x*r.x+w.y*r.y)));
+          if(!best || ang>best.ang) best={n,ang}; });
+        const m={x:O.x+w.x*L*CM*0.55+best.n.x*28, y:O.y+w.y*L*CM*0.55+best.n.y*28};
+        el('text',{x:m.x,y:m.y+8,'font-size':24,'font-weight':800,fill:col,'text-anchor':'middle',
+          stroke:'#fff','stroke-width':5,'paint-order':'stroke','stroke-linejoin':'round'}, L+'cm');
+      }); };
+      lbl(u1,u2,q.a,RED); lbl(u2,u1,q.b,BLUE);
+      // はしと まん中の 点
+      [E1,E2,E3,E4].forEach(p=>el('circle',{cx:p.x,cy:p.y,r:5.5,fill:'#1f2430'}));
+      el('circle',{cx:O.x,cy:O.y,r:4.5,fill:'#1f2430'});
+    }
+    function marks(){ chBtns.forEach(b=>{ b.classList.remove('ok','ng'); b.querySelector('.mk').textContent=''; }); }
+    function newQ(){
+      if(!order.length){
+        order=['para','rhom','rect','squ'];
+        for(let i=order.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [order[i],order[j]]=[order[j],order[i]]; }
+        if(order[0]===lastK){ order.push(order.shift()); }   // 同じ 形が つづかない
+      }
+      const k=order.shift(); lastK=k;
+      cur=make(k); done=false; hint=false; hintBtn.classList.remove('on');
+      if(hz){ clearTimeout(hz); hz=null; }
+      hanaD.classList.remove('show','fade');
+      marks(); draw();
+      say('対角線を 見て、あてはまる 四角形を 1つ タップ しよう。');
+    }
+    function choose(btn){
+      if(done) return;
+      const k=btn.dataset.k;
+      if(btn.classList.contains('ng')) return;
+      if(k===cur.k){
+        done=true; btn.classList.add('ok'); btn.querySelector('.mk').textContent='✓';
+        const g=document.getElementById('dSides'); if(g) g.classList.add('on');
+        say('正解！ <b>'+NAME[k]+'</b> だね。対角線の はしを つなぐと '+NAME[k]+' に なるよ。','good');
+        playOK(); showHanaD(newQ);
+        return;
+      }
+      btn.classList.add('ng'); btn.querySelector('.mk').textContent='✕';
+      const c=FEAT[k], t=FEAT[cur.k]; let why;
+      if(c.eq && !t.eq)      why='2本の 対角線の 長さが 等しく ないよ。';
+      else if(c.pp && !t.pp) why='2本の 対角線は 垂直に 交わって いないよ。';
+      else if(t.eq && !c.eq && t.pp && !c.pp) why='おしい！ 2本の 対角線は <b>長さが 等しく</b>、<b>垂直にも 交わって</b> いるよ。';
+      else if(t.eq && !c.eq) why='おしい！ 2本の 対角線の <b>長さが 等しい</b> ことも 見てね。';
+      else                   why='おしい！ 2本の 対角線が <b>垂直に 交わって</b> いる ことも 見てね。';
+      beepNG(); say('ちがうよ。'+why,'bad');
+    }
+    chBtns.forEach(b=>b.addEventListener('click',()=>choose(b)));
+    document.getElementById('btnDNext').addEventListener('click', newQ);
+    hintBtn.addEventListener('click',()=>{
+      if(done) return;
+      hint=!hint; hintBtn.classList.toggle('on',hint);
+      const g=document.getElementById('dSides'); if(g) g.classList.toggle('on',hint);
+      say(hint ? '対角線の はしを つなぐと、こんな 形に なるよ。' : '対角線を 見て、あてはまる 四角形を 1つ タップ しよう。');
+    });
+    window.dgNewQ=newQ;
+    newQ();
+  })();
+
   // ── 「表」「図形」「点を移動」「四角形の関係」の 切りかえ ──
   const subEl=document.querySelector('header .sub');
   const SUB={
     hyo:'形を タップ すると <b>対角線</b> が 見えるよ（ヒント）',
     zu :'あてはまる 形を <b>ぜんぶ</b> えらんで「決定」',
+    dg :'対角線を 見て、何の 形か <b>あてよう</b>',   // ★v122
     tai:'白い \u25cb を <b>ドラッグ</b> して 形を 変えよう',
     kan:'かこみを <b>タップ</b> すると なかまが 光るよ'
   };
   window.showPane=function(k){
-    if(!SUB[k]) k='hyo';
+    if(!SUB[k]) k='zu';   // ★v122 はじめは「図形の特ちょう」
     document.getElementById('paneHyo').classList.toggle('show', k==='hyo');
     document.getElementById('paneZu' ).classList.toggle('show', k==='zu');
+    document.getElementById('paneDg' ).classList.toggle('show', k==='dg');   // ★v122
     document.getElementById('paneTai').classList.toggle('show', k==='tai');
     document.getElementById('paneKan').classList.toggle('show', k==='kan');
     document.getElementById('tnHyo').classList.toggle('on', k==='hyo');
     document.getElementById('tnZu' ).classList.toggle('on', k==='zu');
+    document.getElementById('tnDg' ).classList.toggle('on', k==='dg');   // ★v122
     document.getElementById('tnTai').classList.toggle('on', k==='tai');
     document.getElementById('tnKan').classList.toggle('on', k==='kan');
     if(subEl) subEl.innerHTML = SUB[k];
@@ -6509,7 +7044,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
   .qtext{flex:0 0 auto; background:var(--green-l); border-bottom:2px solid #cfe3cf; padding:7px 14px;
     font-size:clamp(12px,3vw,16px); font-weight:700; line-height:1.35}
   .qtext b{color:var(--green-d)}
-  .qtext .ask{color:var(--red)}
+  .qtext .ask{display:block; color:#1f2430; font-size:clamp(16px,4.2vw,26px); line-height:1.3; margin-top:1px}   /* ★v123 問題は 段を かえて 大きく・赤に しない */
 
   /* 左＝図 ／ 右＝テンキー。まん中に よせて ならべる */
   .body{flex:1 1 auto; min-height:0; display:flex; gap:14px; padding:6px 10px; justify-content:center}
@@ -7086,14 +7621,16 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
         if(okS){ ['AD','DC','CB','BA'].forEach(nm=>paintSide(nm,'#2f7dd1',7)); }
       }
 
-      // きいている 辺
-      paintSide(askS, '#e23c3c', 9);
-      sideLabel(askS, okS ? (aS.v+'cm') : '?', '#e23c3c', okS?29:34);
+      // きいている 辺　★v123 赤の 線・「?」は 出さない。正解したら 青で 長さを 出す
+      if(okS){
+        paintSide(askS, '#2f7dd1', 8);
+        sideLabel(askS, aS.v+'cm', '#2f7dd1', 29);
+      }
 
       // きいている 角（辺の 問題が おわってから）
-      if(phase>=1){
-        const r=angleArc(askA, '#e23c3c', 7);
-        angleLabel(askA, okA ? (aA.v+'°') : '?', '#e23c3c', r, okA?28:32);
+      if(phase>=1 && okA){   // ★v123 赤の 弧・「?」は 出さない。正解したら 青で 大きさを 出す
+        const r=angleArc(askA, '#2f7dd1', 6);
+        angleLabel(askA, aA.v+'°', '#2f7dd1', r, 28);
       }
 
       // 頂点の 名前
@@ -7167,7 +7704,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
 
     function askSideQ(){
       phase=0; okS=false; okA=false;
-      qEl.textContent='① 辺'+q.askS+' の 長さは 何cm ですか。';
+      qEl.textContent='【問題】辺'+q.askS+' の 長さは 何cm ですか。';   // ★v123
       unitEl.textContent='cm'; need=String(answerSide(q).v).length; clearAns(); lockPad(false);
       say('');
       draw();
@@ -7175,7 +7712,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
 
     function askAngleQ(){
       phase=1;
-      qEl.textContent='② 角'+q.askA+' の 大きさは 何度 ですか。';
+      qEl.textContent='【問題】角'+q.askA+' の 大きさは 何度 ですか。';   // ★v123
       unitEl.textContent='°'; need=String(answerAngle(q).v).length; clearAns(); lockPad(false);
       say('');
       draw();
@@ -7298,6 +7835,20 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
 
   .ph{flex:1 1 auto; display:flex; align-items:center; justify-content:center; text-align:center; padding:20px; color:var(--sub); font-weight:800; font-size:clamp(15px,3.8vw,20px); line-height:1.6}
 
+  /* ★v113 なぜ 平行四辺形に なるのか（理由を えらぶ） */
+  .reason{display:none; align-items:center; flex-wrap:wrap; gap:8px; font-size:clamp(15px,3.9vw,20px); font-weight:800; color:var(--ink)}
+  .reason.show{display:flex; animation:rfi .45s ease}
+  @keyframes rfi{from{opacity:0}to{opacity:1}}
+  .rgrp{display:inline-flex; gap:6px; padding:4px 6px; border:2px dashed #b9d6b9; border-radius:12px; background:#fff}
+  .rb{font-family:inherit; font-size:clamp(15px,3.9vw,20px); font-weight:800; min-width:2.6em; padding:6px 12px; border-radius:10px; cursor:pointer;
+    background:#fff; color:var(--green-d); border:2px solid var(--green); box-shadow:0 3px 0 #cfe3cf}
+  .rb:active{transform:translateY(2px); box-shadow:0 1px 0 #cfe3cf}
+  .rb.sel{background:#ffe680; border-color:#e0b400; color:#5a4300; box-shadow:0 3px 0 #c9a200}
+  .rb.cok{background:var(--ok); color:#fff; border-color:var(--ok); box-shadow:0 3px 0 #1f7a37}
+  .rb.cng{background:var(--red); color:#fff; border-color:var(--red); box-shadow:0 3px 0 #a82727}
+  .rgrp.lock .rb{cursor:default}
+  .choices.hide{display:none}
+
   /* △4 */
   #hana4{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:clamp(150px,42vw,230px); pointer-events:none; opacity:0; filter:drop-shadow(0 6px 12px rgba(0,0,0,.25))}
   #hana4.show{opacity:1; transition:opacity .15s}
@@ -7340,6 +7891,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
           <text x="166" y="422" text-anchor="end">B</text>
           <text x="694" y="422" text-anchor="start">C</text>
         </g>
+        <g id="parMarks" opacity="0"></g><!-- ★v113 平行の しるし（理由が 正解の とき） -->
         <text id="resName" x="500" y="470" text-anchor="middle" font-size="32" font-weight="800" fill="#2b9b47" opacity="0">平行四辺形！</text>
         <!-- ★v110 はさみは 先生から もらった 絵を 2つに 分けた もの（左の 持ち手＝うしろの 刃／右の 持ち手＋前の 刃）。
              絵の 中の 座標の まま おき、刃の 先が +x を むくように 回す。切る ところ（1171,895）＝(0,0)。ねじ（995,1173）で 開く -->
@@ -7361,6 +7913,13 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
   <footer>
     <div class="panel">
       <div class="msg" id="msg">どんな 四角形に なるかな？ よそうして えらぼう。</div>
+      <div class="reason" id="reason"><!-- ★v113 なぜ 平行四辺形に なるのか -->
+        <span>向かい合った</span>
+        <span class="rgrp" data-g="n"><button class="rb" data-v="1">1</button><button class="rb" data-v="2">2</button></span>
+        <span>組の 辺が</span>
+        <span class="rgrp" data-g="r"><button class="rb" data-v="hei">平行</button><button class="rb" data-v="sui">垂直</button></span>
+        <span>に なるからです。</span>
+      </div>
       <div class="row">
         <div class="choices" id="choices">
           <button class="choice" data-k="trap">台形</button>
@@ -7536,7 +8095,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
       const correct = (k===CORRECT);
       btnOf(CORRECT).classList.add('cok');            // 正解の ボタンは みどり
       if(!correct) btnOf(k).classList.add('cng');     // まちがえた ボタンは あか
-      if(correct){ say('正解！ '+NAME[CORRECT]+'が できたね。','good'); playOK(); showHana(); }
+      if(correct){ say('正解！ '+NAME[CORRECT]+'が できたね。では、なぜ '+NAME[CORRECT]+'に なるのかな？ □に 合う ものを えらぼう。','good'); playOK(); askReason(); }   // ★v113 はなまるは 理由が 正解の とき
       else{ say('ざんねん！ できたのは '+NAME[CORRECT]+'だよ。「もう一回」で ためせるよ。','bad'); }
     });
   }
@@ -7554,9 +8113,77 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
     choices.classList.remove('lock');
     choices.querySelectorAll('.choice').forEach(b=>b.classList.remove('cok','cng'));
     hideHana();
+    resetReason();   // ★v113
     say('どんな 四角形に なるかな？ よそうして えらぼう。');
   }
   $('btnAgain').addEventListener('click', reset2);
+
+  // ── ★v113 なぜ 平行四辺形に なるのか（向かい合った「2」組の 辺が「平行」）──
+  const reason=$('reason'), RANS={n:'2', r:'hei'};
+  let rsel={n:null, r:null}, rTimer=null;
+  (function(){   // 平行の しるし（下と上は ▶、左と右は ▶▶）
+    const g=$('parMarks'), NSv='http://www.w3.org/2000/svg';
+    function chev(x,y,dx,dy,n,color){
+      const L=Math.hypot(dx,dy), ux=dx/L, uy=dy/L, nx=-uy, ny=ux, k=11;
+      for(let i=0;i<n;i++){
+        const o=(i-(n-1)/2)*16, cx=x+ux*o, cy=y+uy*o;
+        const pl=document.createElementNS(NSv,'polyline');
+        pl.setAttribute('points',[[cx-ux*k*0.7+nx*k, cy-uy*k*0.7+ny*k],[cx+ux*k*0.7, cy+uy*k*0.7],[cx-ux*k*0.7-nx*k, cy-uy*k*0.7-ny*k]].map(p=>p.join(',')).join(' '));
+        pl.setAttribute('fill','none'); pl.setAttribute('stroke',color); pl.setAttribute('stroke-width','5');
+        pl.setAttribute('stroke-linecap','round'); pl.setAttribute('stroke-linejoin','round');
+        g.appendChild(pl);
+      }
+    }
+    chev(430,400,500,0,1,'#e8820e'); chev(570,120,500,0,1,'#e8820e');
+    chev(250,260,140,-280,2,'#2f7dd1'); chev(750,260,140,-280,2,'#2f7dd1');
+  })();
+  function askReason(){
+    resetReason();
+    choices.classList.add('hide');
+    reason.classList.add('show');
+  }
+  function resetReason(){
+    if(rTimer){ clearTimeout(rTimer); rTimer=null; }
+    rsel={n:null, r:null};
+    reason.classList.remove('show');
+    reason.querySelectorAll('.rgrp').forEach(g=>g.classList.remove('lock'));
+    reason.querySelectorAll('.rb').forEach(b=>b.classList.remove('sel','cok','cng'));
+    choices.classList.remove('hide');
+    $('parMarks').setAttribute('opacity','0');
+  }
+  reason.querySelectorAll('.rgrp').forEach(grp=>{
+    const k=grp.dataset.g;
+    grp.querySelectorAll('.rb').forEach(b=>{
+      b.addEventListener('click',()=>{
+        if(grp.classList.contains('lock') || rTimer) return;
+        grp.querySelectorAll('.rb').forEach(x=>x.classList.remove('sel','cng'));
+        b.classList.add('sel'); rsel[k]=b.dataset.v;
+        if(rsel.n && rsel.r) judgeReason();
+      });
+    });
+  });
+  function judgeReason(){
+    let allOk=true;
+    reason.querySelectorAll('.rgrp').forEach(grp=>{
+      const k=grp.dataset.g, b=grp.querySelector('.rb.sel'); if(!b) return;
+      b.classList.remove('sel');
+      if(rsel[k]===RANS[k]){ b.classList.add('cok'); grp.classList.add('lock'); }
+      else{ b.classList.add('cng'); allOk=false; }
+    });
+    if(allOk){
+      say('正解！ 向かい合った 2組の 辺が 平行だから、'+NAME[CORRECT]+'だね。','good');
+      $('parMarks').setAttribute('opacity','1');
+      playOK(); showHana();
+    }else{
+      say('ちがう ところが あるよ。赤い ところを もう一度 えらぼう。','bad');
+      rTimer=setTimeout(()=>{
+        rTimer=null;
+        reason.querySelectorAll('.rgrp').forEach(grp=>{
+          const b=grp.querySelector('.rb.cng'); if(b){ b.classList.remove('cng'); rsel[grp.dataset.g]=null; }
+        });
+      },1000);
+    }
+  }
 
   // ── △4 本体：3点から 平行四辺形の 4つ目の点を さがす ──
   (function(){
@@ -7949,8 +8576,9 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
   function load(srcId, frameId){ var raw = document.getElementById(srcId).textContent.replace(/<\\\/script>/g, '<\/script>'); document.getElementById(frameId).srcdoc = raw; }
   load('srcSagasu','fSagasu'); load('srcKakudo','fKakudo'); load('srcSui','fSui'); load('srcHei','fHei'); load('srcPg','fPg'); load('srcPgHelp','fPgHelp'); load('srcPgMore','fPgMore'); load('srcHishi','fHishi'); load('srcHenKaku','fHenKaku'); load('srcTokucho','fTokucho'); load('srcRenshu','fRenshu');
   load('srcZukei','fZukei');   // ★v107 図形のとくちょう
-  var ids=['fSagasu','fKakudo','fSui','fHei','fPg','fPgHelp','fPgMore','fHishi','fHenKaku','fTokucho','fRenshu','fZukei'];   // ★v107 fZukei（図形のとくちょう）
-  var SAKUZU={fSui:1,fHei:1,fPg:1,fPgHelp:1,fPgMore:1,fHishi:1};   // 「作図」の 中の 6つ（★v93：平行四辺形のお助け、★v100：平行四辺形さらに）
+  load('srcDaikei','fDaikei');   // ★v113 作図の 台形
+  var ids=['fSagasu','fKakudo','fSui','fHei','fPg','fPgHelp','fPgMore','fHishi','fHenKaku','fTokucho','fRenshu','fZukei','fDaikei'];   // ★v113 fDaikei ／ ★v107 fZukei（図形のとくちょう）
+  var SAKUZU={fSui:1,fHei:1,fPg:1,fPgHelp:1,fPgMore:1,fHishi:1,fDaikei:1};   // ★v113 台形   // 「作図」の 中の 6つ（★v93：平行四辺形のお助け、★v100：平行四辺形さらに）
   var sakuzuCur='fSui';                        // 「作図」で さいごに 見ていた ページ
   var tabs=Array.prototype.slice.call(document.querySelectorAll('.tab'));
   function show(id){
@@ -8090,7 +8718,7 @@ window.TestRun = (function(){
      skip  … テスト中は「とばす」に かわる ボタン ／ wait … はなまるから 次の 大問までの ms */
   const KIND = { perp:'btnPerp', para:'btnPara', mix:'btnMix' };
   const tokuchoSave    = (w,d) => { const b = d.querySelector('.tnb.on'); return b ? b.id : null; };
-  const tokuchoRestore = (w,d,s) => { const k = { tnHyo:'hyo', tnZu:'zu', tnTai:'tai', tnKan:'kan' }[s]; if(k && w.showPane) w.showPane(k); };
+  const tokuchoRestore = (w,d,s) => { const k = { tnHyo:'hyo', tnZu:'zu', tnDg:'dg', tnTai:'tai', tnKan:'kan' }[s]; if(k && w.showPane) w.showPane(k); };
   const renshuSave     = (w,d) => { const b = d.querySelector('.pbtn.active'); return b ? b.dataset.p : null; };
   const renshuRestore  = (w,d,s) => { if(s) clickIn(d, '.pbtn[data-p="'+s+'"]'); };
 
@@ -8150,7 +8778,7 @@ window.TestRun = (function(){
       },
       save:tokuchoSave, restore:tokuchoRestore, wait:2300 },
 
-    zukei: { frame:'fTokucho', label:'四角形の 特ちょう（図形）',
+    zukei: { frame:'fTokucho', label:'四角形の 特ちょう（図形の特ちょう）',
       hook(w,d){
         watchShow(w, d.getElementById('hanaZ'), () => api.onDone('zukei'));
         /* 「まだ ひとつも えらんで いない」は まちがいに 数えない */
