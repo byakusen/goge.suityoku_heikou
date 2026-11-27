@@ -25,9 +25,9 @@
  <button class="tab sakuzu" data-g="sakuzu">作図</button>
  <button class="tab" data-f="fHenKaku">辺と角</button>
  <button class="tab" data-f="fTokucho">四角形の特ちょう</button>
- <button class="tab" data-f="fRenshu">練習問題</button>
+ <button class="tab" data-f="fRenshu">応用問題</button>
  <button class="tab zukan" data-f="fZukei">図形の特ちょう</button>
- <span class="ver">v128</span>
+ <span class="ver">v129</span>
 </div>
 <div class="frames">
  <iframe id="fSagasu" class="show" title="平行・垂直な直線をさがす"></iframe>
@@ -41,7 +41,7 @@
 <iframe id="fHishi" title="ひし形のかき方"></iframe>
 <iframe id="fHenKaku" title="辺と角"></iframe>
 <iframe id="fTokucho" title="四角形の特ちょう"></iframe>
-<iframe id="fRenshu" title="練習問題"></iframe>
+<iframe id="fRenshu" title="応用問題"></iframe>
 <iframe id="fZukei" title="図形のとくちょう"></iframe>
 </div>
 <script type="text/html" id="srcSagasu">
@@ -7955,7 +7955,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
 -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>練習問題</title>
+<title>応用問題</title>
 <style>
   :root{ --green:#4a9e5c; --green-d:#3b824a; --green-l:#eaf5ea; --green-ll:#f4faf3;
     --paper:#ffffff; --line:#1f2430; --red:#e23c3c; --blue:#2f7dd1; --ok:#2b9b47; --ink:#2b2b2b; --sub:#5b6b5e; --ask:#e8820e;
@@ -8003,8 +8003,9 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
   .ph{flex:1 1 auto; display:flex; align-items:center; justify-content:center; text-align:center; padding:20px; color:var(--sub); font-weight:800; font-size:clamp(15px,3.8vw,20px); line-height:1.6}
 
   /* ★v113 なぜ 平行四辺形に なるのか（理由を えらぶ） */
-  .reason{display:none; align-items:center; flex-wrap:wrap; gap:8px; font-size:clamp(15px,3.9vw,20px); font-weight:800; color:var(--ink)}
-  .reason.show{display:flex; animation:rfi .45s ease}
+  /* ★v129 1問目でも 理由の 行の 高さを とっておく（図が 縦に ぶれない）。見えない あいだは 下に おく */
+  .reason{display:flex; visibility:hidden; order:1; align-items:center; flex-wrap:wrap; gap:8px; font-size:clamp(15px,3.9vw,20px); font-weight:800; color:var(--ink)}
+  .reason.show{visibility:visible; order:0; animation:rfi .45s ease}
   @keyframes rfi{from{opacity:0}to{opacity:1}}
   .rgrp{display:inline-flex; gap:6px; padding:4px 6px; border:2px dashed #b9d6b9; border-radius:12px; background:#fff}
   .rb{font-family:inherit; font-size:clamp(15px,3.9vw,20px); font-weight:800; min-width:2.6em; padding:6px 12px; border-radius:10px; cursor:pointer;
@@ -8014,7 +8015,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
   .rb.cok{background:var(--ok); color:#fff; border-color:var(--ok); box-shadow:0 3px 0 #1f7a37}
   .rb.cng{background:var(--red); color:#fff; border-color:var(--red); box-shadow:0 3px 0 #a82727}
   .rgrp.lock .rb{cursor:default}
-  .choices.hide{display:none}
+  .choices.hide{visibility:hidden}   /* ★v129 高さは のこす */
 
   /* △4 */
   #hana4{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:clamp(150px,42vw,230px); pointer-events:none; opacity:0; filter:drop-shadow(0 6px 12px rgba(0,0,0,.25))}
@@ -8032,7 +8033,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
 </style>
 
 <header>
-  <h1>練習問題</h1>
+  <h1>応用問題</h1>
   <div class="pnav">
     <button class="pbtn active" data-p="p4">平行四辺形のもう１点</button>
     <button class="pbtn" data-p="p2">切って移動</button>
@@ -8461,18 +8462,40 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
 
     const eq=(p,c,r)=>p[0]===c&&p[1]===r;
 
+    // ★v129 できている 点D を タップ → その 平行四辺形だけ 出す（同じ 点D を もう一度 → 消す）
+    let shownKey=null;
+    function paraName(t){                        // 例：A D B C（A から じゅんに）
+      const L=t.poly.map(p=>p===t.d?'D':p===A?'A':p===B?'B':'C'), i=L.indexOf('A');
+      return L.slice(i).concat(L.slice(0,i)).join('');
+    }
+    function toggleOne(t){
+      gen++; if(holdTimer){ clearTimeout(holdTimer); holdTimer=null; } locked=false;
+      gPar.textContent=''; gFx.textContent='';
+      if(revealed) setReveal(false);
+      hideHana4();                               // はなまるが 出ていたら すぐ 消す
+      if(shownKey===t.key){ shownKey=null; say('平行四辺形を かくしたよ。'); return; }
+      shownKey=t.key;
+      const pts=t.poly.map(p=>px(p[0],p[1]).join(',')).join(' ');
+      gPar.appendChild(mk('polygon',{points:pts, fill:t.color,'fill-opacity':0.16, stroke:t.color,'stroke-width':4,'stroke-linejoin':'round'}));
+      say('平行四辺形 '+paraName(t)+' だよ。もう一度 タップすると 消えるよ。','good');
+    }
+
     function onTap(e){
-      if(done4>=3 || locked) return;            // 線を ひいている間は うけつけない
+      if(locked) return;                        // 線を ひいている間は うけつけない（★v129 done4>=3 は 下で みる）
       const pt=svg.createSVGPoint(), s=(e.touches&&e.touches[0])||e;
       pt.x=s.clientX; pt.y=s.clientY;
       const m=svg.getScreenCTM(); if(!m) return;
       const q=pt.matrixTransform(m.inverse());
       const c=Math.round((q.x-OX)/G), r=Math.round((q.y-OY)/G);
       if(c<0||c>NC||r<0||r>NR) return;
+      const hitD=targets.find(t=>eq(t.d,c,r));   // ★v129 できている 点D なら 出す／消す
+      if(hitD && found[hitD.key]){ toggleOne(hitD); return; }
+      if(done4>=3) return;
       if(eq(A,c,r)||eq(B,c,r)||eq(C,c,r)){ say('そこは もう 頂点だよ。ちがう ところを さがそう。','bad'); return; }
       const hit=targets.find(t=>eq(t.d,c,r));
       if(hit && !found[hit.key]){
         if(revealed){ setReveal(false); gPar.textContent=''; }   // 表示中なら 通常モードへ
+        if(shownKey){ shownKey=null; gPar.textContent=''; }      // ★v129 1つだけ 出しているときも 消す
         found[hit.key]=true; done4++;
         locked=true; const myGen=gen;
         dotD(hit); updateCount(); playOK();
@@ -8498,7 +8521,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
     function clearBoard(m){
       gen++;                                     // 進行中の アニメ・タイマーを 無効に
       if(holdTimer){ clearTimeout(holdTimer); holdTimer=null; }
-      locked=false; found={}; done4=0; setReveal(false);
+      locked=false; found={}; done4=0; setReveal(false); shownKey=null;   // ★v129 shownKey
       gPar.textContent=''; gDots.textContent=''; gFx.textContent=''; gPts.textContent='';
       placeABC(); hideHana4(); updateCount();
       say(m||'あと 1つの 点を さがして タップしてね。');
@@ -8508,7 +8531,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
     // 「表示」：できている 平行四辺形を 全部 静止で 出す（辺・面・Dの点）
     function showAll(){
       gen++; if(holdTimer){ clearTimeout(holdTimer); holdTimer=null; } locked=false;
-      gPar.textContent=''; gDots.textContent=''; let n=0;
+      gPar.textContent=''; gDots.textContent=''; let n=0; shownKey=null;   // ★v129 shownKey
       targets.forEach(t=>{ if(found[t.key]){ n++;
         const pts=t.poly.map(p=>px(p[0],p[1]).join(',')).join(' ');
         gPar.appendChild(mk('polygon',{points:pts, fill:t.color,'fill-opacity':0.16, stroke:t.color,'stroke-width':4,'stroke-linejoin':'round'}));
@@ -8520,7 +8543,7 @@ setFig(60,1); drawFig(); drawMarks(); setProgress(); nextItem();
     // 「非表示」：平行四辺形の 線・面だけ 消す。点（A・B・C と D）は のこす＝「表示」前の状態。
     function hideAll(){
       gen++; if(holdTimer){ clearTimeout(holdTimer); holdTimer=null; } locked=false;
-      gPar.textContent=''; gFx.textContent='';
+      gPar.textContent=''; gFx.textContent=''; shownKey=null;   // ★v129 shownKey
       setReveal(false);
       say('平行四辺形を かくしたよ。');
     }
